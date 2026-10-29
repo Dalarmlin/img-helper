@@ -78,7 +78,14 @@ const WORKER_URL = 'https://your-worker.example.workers.dev';
 - `POST ?action=host` multipart：以原始檔轉送臨時圖床並回傳公開網址
 - 密碼錯誤時回傳 `401`
 
-本 repo 附有可部署的 `worker.js`。請在 Worker 設定（或 Secrets）：
+本 repo 附有可部署的 `worker.js`。之後改完 Worker 可直接部署：
+
+```bash
+npm install
+npm run deploy
+```
+
+Secrets（只需設定一次）：
 
 ```bash
 npx wrangler secret put CUSTOM_PASSCODE
