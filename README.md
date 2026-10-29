@@ -93,4 +93,4 @@ npx wrangler secret put IMGBB_API_KEY
 - 供教學使用
 - Passcode 存在使用者本機瀏覽器，清除網站資料後需重新輸入
 - 圖片網址必須為可公開存取的 `http(s)` 連結
-- 上傳圖片上限 3000 KB；ImgBB 圖會在約 5 分鐘後自動刪除
+- 上傳圖片上限 5 MB；ImgBB 圖會在約 5 分鐘後自動刪除
