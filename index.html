@@ -430,20 +430,6 @@
         </div>
 
         <div class="form-group">
-          <label for="imgbb-key">ImgBB API Key（上傳圖片時需要）</label>
-          <input
-            type="password"
-            id="imgbb-key"
-            name="imgbb-key"
-            placeholder="到 api.imgbb.com 免費申請後貼上"
-            autocomplete="off"
-          />
-          <p class="preview-error" style="display:block;margin-top:0.45rem;color:var(--text-muted);">
-            匿名上傳已不可用；請用免費 API Key。圖片會在 5 分鐘後自動刪除。
-          </p>
-        </div>
-
-        <div class="form-group">
           <label>Image Source</label>
           <div class="source-tabs" role="tablist" aria-label="圖片來源">
             <button type="button" class="source-tab active" data-mode="url" role="tab" aria-selected="true">
@@ -472,7 +458,7 @@
                 accept="image/*"
               />
               <div class="dropzone-title">點擊或拖曳圖片到這裡</div>
-              <div class="dropzone-hint">支援 JPG、PNG、WEBP（上限 3000 KB；經 ImgBB 官方 API，5 分鐘後自動刪除）</div>
+              <div class="dropzone-hint">支援 JPG、PNG、WEBP（上限 3000 KB；經 Worker 上傳 ImgBB，5 分鐘後自動刪除）</div>
               <div class="dropzone-file" id="file-name"></div>
             </div>
           </div>
@@ -495,11 +481,9 @@
 
   <script>
     const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
-    const IMGBB_API_URL = 'https://api.imgbb.com/1/upload';
-    // 自動刪除：5 分鐘 = 300 秒
+    // ImgBB 上傳經 Worker 代轉（API Key 放在 Worker）；自動刪除 5 分鐘
     const IMGBB_EXPIRATION_SEC = 300;
     const PASSCODE_KEY = 'img-helper-passcode';
-    const IMGBB_KEY_STORAGE = 'img-helper-imgbb-key';
     const MAX_UPLOAD_BYTES = 3000 * 1024;
     const SOCIAL_HOSTS = [
       'instagram.com',
@@ -512,7 +496,6 @@
     ];
 
     const passcodeInput = document.getElementById('passcode');
-    const imgbbKeyInput = document.getElementById('imgbb-key');
     const imageUrlInput = document.getElementById('image-url');
     const imageFileInput = document.getElementById('image-file');
     const dropzone = document.getElementById('dropzone');
@@ -536,17 +519,8 @@
       passcodeInput.value = savedPasscode;
     }
 
-    const savedImgbbKey = localStorage.getItem(IMGBB_KEY_STORAGE);
-    if (savedImgbbKey) {
-      imgbbKeyInput.value = savedImgbbKey;
-    }
-
     passcodeInput.addEventListener('input', () => {
       localStorage.setItem(PASSCODE_KEY, passcodeInput.value);
-    });
-
-    imgbbKeyInput.addEventListener('input', () => {
-      localStorage.setItem(IMGBB_KEY_STORAGE, imgbbKeyInput.value.trim());
     });
 
     function clearObjectUrl() {
@@ -830,50 +804,11 @@
       return { exactCount: exact.length, visualCount: visual.length };
     }
 
-    function extractImgBBUrl(data) {
-      const candidates = [
-        data && data.data && data.data.url,
-        data && data.data && data.data.display_url,
-        data && data.data && data.data.image && data.data.image.url,
-        data && data.url,
-      ];
-      return (
-        candidates.find((v) => typeof v === 'string' && /^https?:\/\//i.test(v)) ||
-        ''
-      );
-    }
-
-    async function uploadImgBBOfficial(file, apiKey) {
-      const formData = new FormData();
-      formData.append('image', file, file.name || 'upload.jpg');
-      formData.append('name', file.name || 'upload');
-
-      const endpoint =
-        `${IMGBB_API_URL}?key=${encodeURIComponent(apiKey)}` +
-        `&expiration=${IMGBB_EXPIRATION_SEC}`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await response.json().catch(() => ({}));
-      const url = extractImgBBUrl(data);
-
-      if (!response.ok || !data.success || !url) {
-        const msg =
-          (data && data.error && (data.error.message || data.error)) ||
-          'ImgBB API 上傳失敗（請確認 API Key 是否正確）';
-        throw new Error(typeof msg === 'string' ? msg : 'ImgBB API 上傳失敗');
-      }
-      return url;
-    }
-
-    // 瀏覽器直連被 CORS 擋住時，由 Worker 代轉（同樣需要 API Key）
-    async function uploadImgBBViaWorker(file, passcode, apiKey) {
+    // 圖片一律經 Worker 上傳 ImgBB（API Key 只放在 Worker）
+    async function uploadToImgBB(file, passcode) {
       const formData = new FormData();
       formData.append('image', file, file.name || 'upload.jpg');
       formData.append('expiration', String(IMGBB_EXPIRATION_SEC));
-      formData.append('key', apiKey);
 
       const response = await fetch(`${WORKER_URL}?action=imgbb`, {
         method: 'POST',
@@ -885,7 +820,7 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || `ImgBB 代理上傳失敗（HTTP ${response.status}）`);
+        throw new Error(data.error || `ImgBB 上傳失敗（HTTP ${response.status}）`);
       }
 
       const url = data.url || data.imageUrl || '';
@@ -895,28 +830,10 @@
       return url;
     }
 
-    async function uploadToImgBB(file, passcode, apiKey) {
-      try {
-        return await uploadImgBBOfficial(file, apiKey);
-      } catch (officialErr) {
-        console.warn('ImgBB direct upload failed, fallback to Worker:', officialErr);
-        try {
-          return await uploadImgBBViaWorker(file, passcode, apiKey);
-        } catch (proxyErr) {
-          throw new Error(
-            (proxyErr && proxyErr.message) ||
-              (officialErr && officialErr.message) ||
-              'ImgBB 上傳失敗'
-          );
-        }
-      }
-    }
-
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const passcode = passcodeInput.value.trim();
-      const imgbbKey = imgbbKeyInput.value.trim();
 
       if (!passcode) {
         setStatus('❌ 請輸入通行密碼', 'error');
@@ -934,22 +851,16 @@
       } else if (!selectedFile) {
         setStatus('❌ 請先上傳圖片', 'error');
         return;
-      } else if (!imgbbKey) {
-        setStatus('❌ 上傳圖片需要 ImgBB API Key（api.imgbb.com 免費申請）', 'error');
-        return;
       }
 
       localStorage.setItem(PASSCODE_KEY, passcode);
-      if (imgbbKey) {
-        localStorage.setItem(IMGBB_KEY_STORAGE, imgbbKey);
-      }
       resultsEl.innerHTML = '';
       submitBtn.disabled = true;
 
       try {
         if (sourceMode === 'upload') {
           setStatus('☁️ 上傳圖片至 ImgBB（5 分鐘後自動刪除）...', 'loading');
-          imageUrl = await uploadToImgBB(selectedFile, passcode, imgbbKey);
+          imageUrl = await uploadToImgBB(selectedFile, passcode);
         }
 
         const payload = { imageUrl, image_url: imageUrl };

@@ -1,8 +1,9 @@
 /**
  * Cloudflare Worker for img-helper
  *
- * Secrets 建議：
- *   CUSTOM_PASSCODE、SERPAPI_KEY、IMGBB_API_KEY（可選；也可由前端 FormData 傳 key）
+ * Secrets / 程式碼內設定：
+ *   CUSTOM_PASSCODE、SERPAPI_KEY、IMGBB_API_KEY
+ *   （ImgBB Key 只放 Worker，前端不需輸入）
  *
  * 端點：
  *   POST JSON { imageUrl }         → Google Lens（exact + visual）
@@ -31,7 +32,8 @@ export default {
     const CUSTOM_PASSCODE =
       (env && env.CUSTOM_PASSCODE) || 'CHANGE_ME_PASSCODE';
     const SERPAPI_KEY = (env && env.SERPAPI_KEY) || 'CHANGE_ME_SERPAPI_KEY';
-    const IMGBB_API_KEY = (env && env.IMGBB_API_KEY) || '';
+    // 也可直接改成字串：'your_imgbb_api_key'
+    const IMGBB_API_KEY = (env && env.IMGBB_API_KEY) || 'CHANGE_ME_IMGBB_API_KEY';
     // ==========================================
 
     const clientPasscode = request.headers.get('X-Access-Passcode');
@@ -57,16 +59,14 @@ export default {
 
         const expirationRaw = form.get('expiration');
         const expiration = Number(expirationRaw) > 0 ? Number(expirationRaw) : 300;
-        const keyFromForm = String(form.get('key') || '').trim();
-        const apiKey = keyFromForm || IMGBB_API_KEY;
 
-        if (!apiKey) {
+        if (!IMGBB_API_KEY || IMGBB_API_KEY === 'CHANGE_ME_IMGBB_API_KEY') {
           return json(
             {
               error:
-                'Missing ImgBB API key. Get a free key at https://api.imgbb.com/',
+                'Worker missing IMGBB_API_KEY. Set it in Worker code or Secrets.',
             },
-            400,
+            500,
             corsHeaders
           );
         }
@@ -76,7 +76,7 @@ export default {
         imgbbForm.append('name', file.name || 'upload');
 
         const imgbbRes = await fetch(
-          `https://api.imgbb.com/1/upload?key=${encodeURIComponent(apiKey)}&expiration=${expiration}`,
+          `https://api.imgbb.com/1/upload?key=${encodeURIComponent(IMGBB_API_KEY)}&expiration=${expiration}`,
           { method: 'POST', body: imgbbForm }
         );
         const imgbbData = await imgbbRes.json();
