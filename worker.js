@@ -2,14 +2,16 @@
  * Cloudflare Worker for img-helper
  *
  * Secrets / 程式碼內設定：
- *   CUSTOM_PASSCODE、SERPAPI_KEY、IMGBB_API_KEY
+ *   CUSTOM_PASSCODE、SERPAPI_KEY
  *
  * 端點：
- *   POST JSON { imageUrl }        → Google Lens（exact + visual）
- *   POST ?action=imgbb-config     → 回傳 ImgBB key（瀏覽器以原始檔 FormData 直連上傳）
+ *   POST JSON { imageUrl }           → Google Lens（exact + visual）
+ *   POST multipart ?action=host      → 以原始檔轉送臨時圖床，回傳公開網址
+ *                                      （不用 base64，避免人臉比對失真）
  *
- * 注意：不使用 base64 上傳，以免人臉／以圖搜圖準度下降。
- * 也不由 Worker 代轉檔案（Worker IP 易被 ImgBB 擋）。
+ * 圖床策略（皆傳原始 binary）：
+ *   1) imgdb.io（ttl=300 秒 ≈ 5 分鐘）
+ *   2) tmpdrop（ttl=1h）備援
  */
 
 export default {
@@ -34,7 +36,6 @@ export default {
     const CUSTOM_PASSCODE =
       (env && env.CUSTOM_PASSCODE) || 'CHANGE_ME_PASSCODE';
     const SERPAPI_KEY = (env && env.SERPAPI_KEY) || 'CHANGE_ME_SERPAPI_KEY';
-    const IMGBB_API_KEY = (env && env.IMGBB_API_KEY) || 'CHANGE_ME_IMGBB_API_KEY';
     // ==========================================
 
     const clientPasscode = request.headers.get('X-Access-Passcode');
@@ -48,24 +49,31 @@ export default {
 
     const reqUrl = new URL(request.url);
     const action = reqUrl.searchParams.get('action') || '';
+    const contentType = request.headers.get('content-type') || '';
 
-    if (action === 'imgbb-config') {
-      if (!IMGBB_API_KEY || IMGBB_API_KEY === 'CHANGE_ME_IMGBB_API_KEY') {
+    if (action === 'host' || contentType.includes('multipart/form-data')) {
+      try {
+        const form = await request.formData();
+        const file =
+          form.get('image') || form.get('file') || form.get('fileToUpload');
+        if (!file || typeof file === 'string') {
+          return json({ error: 'Missing image file' }, 400, corsHeaders);
+        }
+
+        const hosted = await hostOriginalImage(file);
         return json(
-          { error: 'Worker missing IMGBB_API_KEY' },
-          500,
+          {
+            url: hosted.url,
+            imageUrl: hosted.url,
+            provider: hosted.provider,
+            expires_in: hosted.expiresIn,
+          },
+          200,
           corsHeaders
         );
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 502, corsHeaders);
       }
-      return json(
-        {
-          key: IMGBB_API_KEY,
-          expiration: 300,
-          upload_url: 'https://api.imgbb.com/1/upload',
-        },
-        200,
-        corsHeaders
-      );
     }
 
     try {
@@ -119,6 +127,72 @@ function json(payload, status, corsHeaders) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+async function hostOriginalImage(file) {
+  const filename = file.name || 'upload.jpg';
+  const errors = [];
+
+  // 1) imgdb.io：ttl=300（約 5 分鐘），原始檔 FormData
+  try {
+    const form = new FormData();
+    form.append('file', file, filename);
+    form.append('ttl', '300');
+
+    const res = await fetch('https://imgdb.io/api/v1/upload', {
+      method: 'POST',
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    const url = data.url || '';
+    if (res.ok && /^https?:\/\//i.test(url)) {
+      return { url, provider: 'imgdb', expiresIn: 300 };
+    }
+    errors.push(`imgdb: ${data.error || res.status}`);
+  } catch (err) {
+    errors.push(`imgdb: ${err.message || err}`);
+  }
+
+  // 2) tmpdrop：ttl=1h 備援，原始檔
+  try {
+    const form = new FormData();
+    form.append('file', file, filename);
+    form.append('ttl', '1h');
+
+    const res = await fetch('https://tmpdrop.solardev.online/upload', {
+      method: 'POST',
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    const url = data.url || '';
+    if (res.ok && /^https?:\/\//i.test(url)) {
+      return { url, provider: 'tmpdrop', expiresIn: 3600 };
+    }
+    errors.push(`tmpdrop: ${data.error || res.status}`);
+  } catch (err) {
+    errors.push(`tmpdrop: ${err.message || err}`);
+  }
+
+  // 3) img402：原始檔備援
+  try {
+    const form = new FormData();
+    form.append('file', file, filename);
+
+    const res = await fetch('https://img402.dev/api/free', {
+      method: 'POST',
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    const url = data.url || '';
+    if (res.ok && /^https?:\/\//i.test(url)) {
+      return { url, provider: 'img402', expiresIn: null };
+    }
+    errors.push(`img402: ${data.error || res.status}`);
+  } catch (err) {
+    errors.push(`img402: ${err.message || err}`);
+  }
+
+  throw new Error(`臨時圖床上傳失敗：${errors.join(' | ')}`);
 }
 
 async function searchGoogleLens(apiKey, source, type) {

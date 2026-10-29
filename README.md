@@ -6,7 +6,7 @@
 
 - Passcode 通過 `X-Access-Passcode` 標頭驗證，並自動存入 `localStorage`
 - 支援兩種圖片來源：公開網址，或本機上傳
-- 本機上傳：瀏覽器以**原始圖檔 FormData**直連 ImgBB（`expiration=300`；不使用 base64）
+- 本機上傳：原始圖檔經 Worker 轉送臨時圖床（優先 imgdb.io `ttl=300`；不使用 base64／ImgBB）
 - 輸入網址 / 選擇檔案後即時預覽
 - 呼叫 Cloudflare Worker API，渲染 exact / visual 結果卡片
 - 自動標示常見社群平台來源（Instagram、Facebook、TikTok、X/Twitter、Threads、LinkedIn）
@@ -75,7 +75,7 @@ const WORKER_URL = 'https://your-worker.example.workers.dev';
 - 驗證標頭 `X-Access-Passcode`
 - 搜尋請求 body：`{ "imageUrl": "https://..." }`（也相容 `image_url`）
 - Worker 會同時查 `exact_matches` 與 `visual_matches`（`hl=zh-tw`、`country=tw`、`auto_crop=false`）
-- `POST ?action=imgbb-config`：回傳 ImgBB key，供瀏覽器以原始檔上傳（避開 Worker IP；不用 base64）
+- `POST ?action=host` multipart：以原始檔轉送臨時圖床並回傳公開網址
 - 密碼錯誤時回傳 `401`
 
 本 repo 附有可部署的 `worker.js`。請在 Worker 設定（或 Secrets）：
@@ -83,14 +83,12 @@ const WORKER_URL = 'https://your-worker.example.workers.dev';
 ```bash
 npx wrangler secret put CUSTOM_PASSCODE
 npx wrangler secret put SERPAPI_KEY
-npx wrangler secret put IMGBB_API_KEY
 ```
-
-前端不需輸入 ImgBB Key；Key 只放在 Worker。
 
 ## 注意事項
 
 - 供教學使用
 - Passcode 存在使用者本機瀏覽器，清除網站資料後需重新輸入
 - 圖片網址必須為可公開存取的 `http(s)` 連結
-- 上傳圖片上限 5 MB；ImgBB 圖會在約 5 分鐘後自動刪除
+- 上傳圖片上限 5 MB；臨時圖床約 5 分鐘後自動刪除（備援可能為 1 小時）
+- 不使用 ImgBB／base64（ImgBB API 常誤報 maintenance，且 base64 影響人臉比對準度）

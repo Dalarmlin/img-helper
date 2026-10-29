@@ -458,7 +458,7 @@
                 accept="image/*"
               />
               <div class="dropzone-title">點擊或拖曳圖片到這裡</div>
-              <div class="dropzone-hint">支援 JPG、PNG、WEBP（上限 5 MB；瀏覽器直連 ImgBB，5 分鐘後自動刪除）</div>
+              <div class="dropzone-hint">支援 JPG、PNG、WEBP（上限 5 MB；原始檔上傳臨時圖床，約 5 分鐘後刪除）</div>
               <div class="dropzone-file" id="file-name"></div>
             </div>
           </div>
@@ -481,8 +481,6 @@
 
   <script>
     const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
-    // ImgBB 上傳經 Worker 代轉（API Key 放在 Worker）；自動刪除 5 分鐘
-    const IMGBB_EXPIRATION_SEC = 300;
     const PASSCODE_KEY = 'img-helper-passcode';
     const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
     const SOCIAL_HOSTS = [
@@ -804,63 +802,27 @@
       return { exactCount: exact.length, visualCount: visual.length };
     }
 
-    function extractImgBBUrl(data) {
-      const candidates = [
-        data && data.data && data.data.url,
-        data && data.data && data.data.display_url,
-        data && data.url,
-        data && data.imageUrl,
-      ];
-      return (
-        candidates.find((v) => typeof v === 'string' && /^https?:\/\//i.test(v)) ||
-        ''
-      );
-    }
-
-    // 從 Worker 取得 ImgBB key（Passcode 保護；Key 不寫在前端原始碼）
-    async function fetchImgBBConfig(passcode) {
-      const response = await fetch(`${WORKER_URL}?action=imgbb-config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Access-Passcode': passcode,
-        },
-        body: '{}',
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.key) {
-        throw new Error(data.error || '無法取得 ImgBB 設定');
-      }
-      return {
-        key: data.key,
-        expiration: Number(data.expiration) || IMGBB_EXPIRATION_SEC,
-        uploadUrl: data.upload_url || 'https://api.imgbb.com/1/upload',
-      };
-    }
-
-    // 只上傳原始圖檔（FormData binary），不用 base64，避免人臉比對失真
-    async function uploadToImgBB(file, passcode) {
-      const config = await fetchImgBBConfig(passcode);
+    // 原始檔經 Worker 轉送臨時圖床（不用 base64 / 不用 ImgBB）
+    async function uploadOriginalImage(file, passcode) {
       const formData = new FormData();
       formData.append('image', file, file.name || 'upload.jpg');
-      formData.append('name', file.name || 'upload');
 
-      const endpoint =
-        `${config.uploadUrl}?key=${encodeURIComponent(config.key)}` +
-        `&expiration=${config.expiration}`;
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(`${WORKER_URL}?action=host`, {
         method: 'POST',
+        headers: {
+          'X-Access-Passcode': passcode,
+        },
         body: formData,
       });
-      const data = await response.json().catch(() => ({}));
-      const url = extractImgBBUrl(data);
 
-      if (!response.ok || !data.success || !url) {
-        const msg =
-          (data && data.error && data.error.message) ||
-          'ImgBB 上傳失敗';
-        throw new Error(msg);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `臨時圖床上傳失敗（HTTP ${response.status}）`);
+      }
+
+      const url = data.url || data.imageUrl || '';
+      if (!/^https?:\/\//i.test(url)) {
+        throw new Error('臨時圖床未回傳有效網址');
       }
       return url;
     }
@@ -894,8 +856,8 @@
 
       try {
         if (sourceMode === 'upload') {
-          setStatus('☁️ 上傳圖片至 ImgBB（5 分鐘後自動刪除）...', 'loading');
-          imageUrl = await uploadToImgBB(selectedFile, passcode);
+          setStatus('☁️ 上傳原始圖片至臨時圖床...', 'loading');
+          imageUrl = await uploadOriginalImage(selectedFile, passcode);
         }
 
         const payload = { imageUrl, image_url: imageUrl };
