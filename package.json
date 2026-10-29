@@ -2,8 +2,8 @@
   "name": "img-helper",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "deploy": "npx wrangler deploy",
+    "dev": "npx wrangler dev"
   },
   "devDependencies": {
     "wrangler": "^4.155.0"
