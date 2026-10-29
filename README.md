@@ -6,7 +6,7 @@
 
 - Passcode 通過 `X-Access-Passcode` 標頭驗證，並自動存入 `localStorage`
 - 支援兩種圖片來源：公開網址，或本機上傳
-- 本機上傳：瀏覽器直連 ImgBB（`expiration=300`）；若失敗再改 Worker 代轉 / Litterbox 備援
+- 本機上傳：瀏覽器以**原始圖檔 FormData**直連 ImgBB（`expiration=300`；不使用 base64）
 - 輸入網址 / 選擇檔案後即時預覽
 - 呼叫 Cloudflare Worker API，渲染 exact / visual 結果卡片
 - 自動標示常見社群平台來源（Instagram、Facebook、TikTok、X/Twitter、Threads、LinkedIn）
@@ -75,8 +75,7 @@ const WORKER_URL = 'https://your-worker.example.workers.dev';
 - 驗證標頭 `X-Access-Passcode`
 - 搜尋請求 body：`{ "imageUrl": "https://..." }`（也相容 `image_url`）
 - Worker 會同時查 `exact_matches` 與 `visual_matches`（`hl=zh-tw`、`country=tw`、`auto_crop=false`）
-- `POST ?action=imgbb-config`：回傳 ImgBB key 供瀏覽器直連上傳（避開 Worker IP 被 ImgBB 誤判 maintenance）
-- `POST ?action=imgbb` multipart：Worker 代轉上傳（備援）
+- `POST ?action=imgbb-config`：回傳 ImgBB key，供瀏覽器以原始檔上傳（避開 Worker IP；不用 base64）
 - 密碼錯誤時回傳 `401`
 
 本 repo 附有可部署的 `worker.js`。請在 Worker 設定（或 Secrets）：

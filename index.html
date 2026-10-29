@@ -838,8 +838,8 @@
       };
     }
 
-    // 優先：瀏覽器直連 ImgBB（用使用者 IP，避開 Worker IP 被回 maintenance）
-    async function uploadImgBBFromBrowser(file, passcode) {
+    // 只上傳原始圖檔（FormData binary），不用 base64，避免人臉比對失真
+    async function uploadToImgBB(file, passcode) {
       const config = await fetchImgBBConfig(passcode);
       const formData = new FormData();
       formData.append('image', file, file.name || 'upload.jpg');
@@ -859,77 +859,10 @@
       if (!response.ok || !data.success || !url) {
         const msg =
           (data && data.error && data.error.message) ||
-          'ImgBB 瀏覽器上傳失敗';
+          'ImgBB 上傳失敗';
         throw new Error(msg);
       }
       return url;
-    }
-
-    // 備援：Worker 代轉（base64）
-    async function uploadImgBBViaWorker(file, passcode) {
-      const formData = new FormData();
-      formData.append('image', file, file.name || 'upload.jpg');
-      formData.append('expiration', String(IMGBB_EXPIRATION_SEC));
-
-      const response = await fetch(`${WORKER_URL}?action=imgbb`, {
-        method: 'POST',
-        headers: {
-          'X-Access-Passcode': passcode,
-        },
-        body: formData,
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || `ImgBB Worker 上傳失敗（HTTP ${response.status}）`);
-      }
-
-      const url = extractImgBBUrl(data);
-      if (!url) {
-        throw new Error('ImgBB 未回傳有效網址');
-      }
-      return url;
-    }
-
-    // 最後備援：Litterbox 臨時圖床（1 小時，瀏覽器 CORS 可用）
-    async function uploadToLitterbox(file) {
-      const formData = new FormData();
-      formData.append('reqtype', 'fileupload');
-      formData.append('time', '1h');
-      formData.append('fileToUpload', file, file.name || 'upload.jpg');
-
-      const response = await fetch(
-        'https://litterbox.catbox.moe/resources/internals/api.php',
-        { method: 'POST', body: formData }
-      );
-      const text = (await response.text()).trim();
-      if (!response.ok || !/^https?:\/\//i.test(text)) {
-        throw new Error(text || 'Litterbox 上傳失敗');
-      }
-      return text;
-    }
-
-    async function uploadToImgBB(file, passcode) {
-      try {
-        return await uploadImgBBFromBrowser(file, passcode);
-      } catch (browserErr) {
-        console.warn('ImgBB browser upload failed:', browserErr);
-        try {
-          return await uploadImgBBViaWorker(file, passcode);
-        } catch (workerErr) {
-          console.warn('ImgBB worker upload failed:', workerErr);
-          try {
-            return await uploadToLitterbox(file);
-          } catch (litterErr) {
-            throw new Error(
-              (browserErr && browserErr.message) ||
-                (workerErr && workerErr.message) ||
-                (litterErr && litterErr.message) ||
-                '圖片上傳失敗'
-            );
-          }
-        }
-      }
     }
 
     form.addEventListener('submit', async (e) => {
