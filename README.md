@@ -6,7 +6,7 @@
 
 - Passcode 通過 `X-Access-Passcode` 標頭驗證，並自動存入 `localStorage`
 - 支援兩種圖片來源：公開網址，或本機上傳
-- 本機上傳會先送到 ImgBB（`expiration=300`，約 5 分鐘後自動刪除），取得公開網址後再呼叫 Worker
+- 本機上傳需 ImgBB API Key（[免費申請](https://api.imgbb.com/)），以官方 API `expiration=300`（約 5 分鐘自動刪除）取得公開網址後再呼叫 Worker
 - 輸入網址 / 選擇檔案後即時預覽
 - 呼叫 Cloudflare Worker API，渲染 exact / visual 結果卡片
 - 自動標示常見社群平台來源（Instagram、Facebook、TikTok、X/Twitter、Threads、LinkedIn）
@@ -86,17 +86,14 @@ npx wrangler secret put SERPAPI_KEY
 npx wrangler secret put IMGBB_API_KEY   # 可選；有 key 時走官方 API + 5 分鐘自動刪除
 ```
 
-前端也可在瀏覽器 console 設定 ImgBB key：
-
-```js
-localStorage.setItem('img-helper-imgbb-key', 'YOUR_IMGBB_API_KEY')
-```
+頁面上有 ImgBB API Key 輸入框，會自動存入 `localStorage`。
 
 不要把 Passcode / API Key 寫死在程式碼裡。
 
 ## 注意事項
 
 - 此工具僅供私人使用，請勿公開分享 Passcode
-- Passcode 存在使用者本機瀏覽器，清除網站資料後需重新輸入
+- Passcode / ImgBB Key 存在使用者本機瀏覽器，清除網站資料後需重新輸入
 - 圖片網址必須為可公開存取的 `http(s)` 連結
 - 上傳圖片上限 3000 KB；ImgBB 圖會在約 5 分鐘後自動刪除
+- ImgBB 匿名上傳目前不可用，必須使用官方 API Key

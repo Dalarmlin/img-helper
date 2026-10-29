@@ -1,17 +1,12 @@
 /**
  * Cloudflare Worker for img-helper
  *
- * 可直接貼到 Cloudflare Workers；密碼 / Key 建議改成 Secrets：
- *   CUSTOM_PASSCODE、SERPAPI_KEY、IMGBB_API_KEY（可選）
+ * Secrets 建議：
+ *   CUSTOM_PASSCODE、SERPAPI_KEY、IMGBB_API_KEY（可選；也可由前端 FormData 傳 key）
  *
  * 端點：
  *   POST JSON { imageUrl }         → Google Lens（exact + visual）
- *   POST multipart ?action=imgbb   → 代轉上傳到 ImgBB（expiration=300 秒）
- *
- * 準度策略：
- *   1) exact_matches + visual_matches
- *   2) hl=zh-tw、country=tw
- *   3) auto_crop=false
+ *   POST multipart ?action=imgbb   → 代轉上傳到 ImgBB（expiration 預設 300 秒）
  */
 
 export default {
@@ -62,61 +57,43 @@ export default {
 
         const expirationRaw = form.get('expiration');
         const expiration = Number(expirationRaw) > 0 ? Number(expirationRaw) : 300;
+        const keyFromForm = String(form.get('key') || '').trim();
+        const apiKey = keyFromForm || IMGBB_API_KEY;
 
-        let publicUrl = '';
-
-        if (IMGBB_API_KEY) {
-          const imgbbForm = new FormData();
-          imgbbForm.append('image', file, file.name || 'upload.jpg');
-          imgbbForm.append('name', file.name || 'upload');
-
-          const imgbbRes = await fetch(
-            `https://api.imgbb.com/1/upload?key=${encodeURIComponent(IMGBB_API_KEY)}&expiration=${expiration}`,
-            { method: 'POST', body: imgbbForm }
+        if (!apiKey) {
+          return json(
+            {
+              error:
+                'Missing ImgBB API key. Get a free key at https://api.imgbb.com/',
+            },
+            400,
+            corsHeaders
           );
-          const imgbbData = await imgbbRes.json();
-          publicUrl =
-            (imgbbData.data && (imgbbData.data.url || imgbbData.data.display_url)) ||
-            '';
+        }
 
-          if (!imgbbRes.ok || !imgbbData.success || !publicUrl) {
-            return json(
-              {
-                error:
-                  (imgbbData.error && imgbbData.error.message) ||
-                  'ImgBB API upload failed',
-              },
-              502,
-              corsHeaders
-            );
-          }
-        } else {
-          // 無 API key：走 ImgBB 匿名 json 上傳，5 分鐘自動刪除
-          const anonForm = new FormData();
-          anonForm.append('source', file, file.name || 'upload.jpg');
-          anonForm.append('type', 'file');
-          anonForm.append('action', 'upload');
-          anonForm.append('expiration', 'PT5M');
+        const imgbbForm = new FormData();
+        imgbbForm.append('image', file, file.name || 'upload.jpg');
+        imgbbForm.append('name', file.name || 'upload');
 
-          const anonRes = await fetch('https://imgbb.com/json', {
-            method: 'POST',
-            body: anonForm,
-          });
-          const anonData = await anonRes.json();
-          publicUrl =
-            (anonData.image && (anonData.image.url || anonData.image.display_url)) ||
-            (anonData.data &&
-              anonData.data.image &&
-              (anonData.data.image.url || anonData.data.image.display_url)) ||
-            '';
+        const imgbbRes = await fetch(
+          `https://api.imgbb.com/1/upload?key=${encodeURIComponent(apiKey)}&expiration=${expiration}`,
+          { method: 'POST', body: imgbbForm }
+        );
+        const imgbbData = await imgbbRes.json();
+        const publicUrl =
+          (imgbbData.data && (imgbbData.data.url || imgbbData.data.display_url)) ||
+          '';
 
-          if (!anonRes.ok || !publicUrl) {
-            return json(
-              { error: 'ImgBB anonymous upload failed' },
-              502,
-              corsHeaders
-            );
-          }
+        if (!imgbbRes.ok || !imgbbData.success || !publicUrl) {
+          return json(
+            {
+              error:
+                (imgbbData.error && imgbbData.error.message) ||
+                'ImgBB API upload failed',
+            },
+            502,
+            corsHeaders
+          );
         }
 
         return json({ url: publicUrl, imageUrl: publicUrl }, 200, corsHeaders);
