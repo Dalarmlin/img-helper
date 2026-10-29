@@ -1,101 +1,105 @@
 # img-helper
 
-極簡暗色系單頁前端，用於呼叫 Cloudflare Worker 進行以圖搜圖。供教學使用。
+A minimal dark-mode single-page app for reverse image search. The frontend talks to a Cloudflare Worker, which proxies Google Lens results through SerpApi.
 
-## 功能
+This project is intended for teaching and learning: exploring reverse image search APIs, browser uploads to temporary hosts, Passcode-protected Worker endpoints, and a simple GitHub Pages + Workers deployment workflow. It is not meant as a production-ready commercial product.
 
-- Passcode 通過 `X-Access-Passcode` 標頭驗證，並自動存入 `localStorage`
-- 支援兩種圖片來源：公開網址，或本機上傳
-- 本機上傳：原始圖檔經 Worker 轉送臨時圖床（優先 imgdb.io `ttl=300`；不使用 base64／ImgBB）
-- 輸入網址 / 選擇檔案後即時預覽
-- 呼叫 Cloudflare Worker API，渲染 exact / visual 結果卡片
-- 自動標示常見社群平台來源（Instagram、Facebook、TikTok、X/Twitter、Threads、LinkedIn）
+## Features
 
-## 檔案結構
+- Passcode auth via the `X-Access-Passcode` header, saved in `localStorage`
+- Two image sources: public URL, or local file upload
+- Local uploads send the original file through the Worker to a temporary image host (preferred: imgdb.io with `ttl=300`)
+- Live preview after entering a URL or choosing a file
+- Renders Exact Match and Visual Match result cards from the Worker API
+- Highlights common social platforms (Instagram, Facebook, TikTok, X/Twitter, Threads, LinkedIn)
+
+## Project layout
 
 ```
 img-helper/
-├── index.html   # 完整 SPA（HTML / CSS / JS）
+├── index.html       # Frontend SPA (HTML / CSS / JS)
+├── worker.js        # Cloudflare Worker
+├── wrangler.jsonc   # Wrangler deploy config
+├── package.json
 └── README.md
 ```
 
-## 部署到 GitHub Pages
+## Deploy the frontend to GitHub Pages
 
-### 1. 建立 GitHub 儲存庫
+### 1. Create a GitHub repository
 
-1. 到 [GitHub](https://github.com/new) 建立新的公開（或私人）儲存庫，例如 `img-helper`
-2. 將本專案推送到該儲存庫：
+1. Create a new repository on [GitHub](https://github.com/new), for example `img-helper`
+2. Push this project:
 
 ```bash
 git init
-git add index.html README.md
+git add .
 git commit -m "Initial commit: img-helper SPA"
 git branch -M main
-git remote add origin https://github.com/<你的帳號>/img-helper.git
+git remote add origin https://github.com/<your-username>/img-helper.git
 git push -u origin main
 ```
 
-### 2. 啟用 GitHub Pages
+### 2. Enable GitHub Pages
 
-1. 開啟儲存庫 → **Settings** → **Pages**
-2. 在 **Build and deployment** 區塊：
-   - **Source**：選擇 `Deploy from a branch`
-   - **Branch**：選擇 `main`（或你使用的分支）
-   - **Folder**：選擇 `/ (root)`
-3. 按下 **Save**
+1. Open the repository → **Settings** → **Pages**
+2. Under **Build and deployment**:
+   - **Source**: `Deploy from a branch`
+   - **Branch**: `main` (or your branch)
+   - **Folder**: `/ (root)`
+3. Click **Save**
 
-約等待一到兩分鐘後，網站會出現在：
+After a minute or two, the site should be available at:
 
 ```
-https://<你的帳號>.github.io/img-helper/
+https://<your-username>.github.io/img-helper/
 ```
 
-若儲存庫名稱不是 `img-helper`，網址會對應實際儲存庫名稱。
+If the repository name is different, the URL path will match that name. This project includes a `.nojekyll` file so Pages serves the static SPA correctly.
 
-### 3. 使用方式
+### 3. How to use
 
-1. 打開部署後的網頁
-2. 輸入通行密碼（Passcode）
-3. 選擇「網址」貼上公開圖片連結，或切換「上傳」選本機圖片
-4. 點擊「開始比對分析」
+1. Open the deployed page
+2. Enter the Passcode
+3. Paste a public image URL, or switch to **Upload** and choose a local image
+4. Click **Start analysis**
 
-密碼會自動保存在瀏覽器 `localStorage`，下次開啟會自動填入。
+The Passcode is stored in browser `localStorage` and will be filled in automatically next time.
 
-## 後端設定
+## Backend (Cloudflare Worker)
 
-請在 `index.html` 自行設定你的 Worker 位址，例如：
+Set your Worker URL in `index.html`, for example:
 
 ```js
 const WORKER_URL = 'https://your-worker.example.workers.dev';
 ```
 
-請確認該 Worker：
+The Worker should:
 
-- 接受 `POST` 請求
-- 驗證標頭 `X-Access-Passcode`
-- 搜尋請求 body：`{ "imageUrl": "https://..." }`（也相容 `image_url`）
-- Worker 會同時查 `exact_matches` 與 `visual_matches`（`hl=zh-tw`、`country=tw`、`auto_crop=false`）
-- `POST ?action=host` multipart：以原始檔轉送臨時圖床並回傳公開網址
-- 密碼錯誤時回傳 `401`
+- Accept `POST` requests
+- Validate the `X-Access-Passcode` header
+- Accept search body `{ "imageUrl": "https://..." }` (also accepts `image_url`)
+- Query both `exact_matches` and `visual_matches` (`hl=zh-tw`, `country=tw`, `auto_crop=false`)
+- Support `POST ?action=host` with multipart form data to upload the original file to a temporary host and return a public URL
+- Return `401` when the Passcode is invalid
 
-本 repo 附有可部署的 `worker.js`。之後改完 Worker 可直接部署：
+This repo includes a ready-to-deploy `worker.js`. After changing the Worker, deploy with:
 
 ```bash
 npm install
 npm run deploy
 ```
 
-Secrets（只需設定一次）：
+Secrets (set once):
 
 ```bash
 npx wrangler secret put CUSTOM_PASSCODE
 npx wrangler secret put SERPAPI_KEY
 ```
 
-## 注意事項
+## Notes
 
-- 供教學使用
-- Passcode 存在使用者本機瀏覽器，清除網站資料後需重新輸入
-- 圖片網址必須為可公開存取的 `http(s)` 連結
-- 上傳圖片上限 5 MB；臨時圖床約 5 分鐘後自動刪除（備援可能為 1 小時）
-- 不使用 ImgBB／base64（ImgBB API 常誤報 maintenance，且 base64 影響人臉比對準度）
+- Built for teaching and learning reverse image search, Workers, and static hosting—not for production-scale or commercial use
+- Passcode is stored only in the browser; clearing site data requires re-entering it
+- Image URLs must be publicly reachable over `http(s)`
+- Upload limit is 5 MB; temporary hosts usually expire after about 5 minutes (fallback hosts may keep files for up to 1 hour)
