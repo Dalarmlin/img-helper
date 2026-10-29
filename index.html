@@ -408,7 +408,7 @@
                 accept="image/*"
               />
               <div class="dropzone-title">點擊或拖曳圖片到這裡</div>
-              <div class="dropzone-hint">支援 JPG、PNG、WEBP、GIF（建議 &lt; 5MB）</div>
+              <div class="dropzone-hint">支援 JPG、PNG、WEBP（上限 3000 KB）</div>
               <div class="dropzone-file" id="file-name"></div>
             </div>
           </div>
@@ -432,7 +432,7 @@
   <script>
     const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
     const PASSCODE_KEY = 'img-helper-passcode';
-    const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+    const MAX_UPLOAD_BYTES = 3000 * 1024;
     const SOCIAL_HOSTS = [
       'instagram.com',
       'facebook.com',
@@ -576,7 +576,7 @@
       }
 
       if (file.size > MAX_UPLOAD_BYTES) {
-        setStatus('❌ 圖片過大，請壓縮至 5MB 以內', 'error');
+        setStatus('❌ 圖片過大，請壓縮至 3000 KB 以內', 'error');
         return;
       }
 
@@ -727,7 +727,8 @@
           setStatus('❌ 請輸入有效的圖片網址', 'error');
           return;
         }
-        payload = { image_url: imageUrl };
+        // 同時送 imageUrl / image_url，相容舊版與新版 Worker
+        payload = { imageUrl, image_url: imageUrl };
       } else {
         if (!selectedFile) {
           setStatus('❌ 請先上傳圖片', 'error');

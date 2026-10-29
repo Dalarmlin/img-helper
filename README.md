@@ -73,16 +73,24 @@ const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
 - 接受 `POST` 請求
 - 驗證標頭 `X-Access-Passcode`
 - 請求 body 為 JSON，兩種模式其一：
-  - 網址：`{ "image_url": "https://..." }`
+  - 網址：`{ "imageUrl": "https://..." }`（也相容 `image_url`）
   - 上傳：`{ "image_base64": "<base64>", "mime_type": "image/jpeg" }`
+- 上傳模式會先呼叫 SerpApi Image API 取得 `image_id`，再查 Google Lens
 - 成功時回傳含 `visual_matches` 陣列的 JSON
 - 密碼錯誤時回傳 `401`
 
-若 Worker 有 CORS 限制，請允許來自 GitHub Pages 網域的請求，並允許自訂標頭 `X-Access-Passcode`。
+本 repo 附有可部署的 `worker.js`。請用 Cloudflare Workers Secrets 設定：
+
+```bash
+npx wrangler secret put CUSTOM_PASSCODE
+npx wrangler secret put SERPAPI_KEY
+```
+
+不要把 Passcode / API Key 寫死在程式碼裡。
 
 ## 注意事項
 
 - 此工具僅供私人使用，請勿公開分享 Passcode
 - Passcode 存在使用者本機瀏覽器，清除網站資料後需重新輸入
 - 圖片網址必須為可公開存取的 `http(s)` 連結
-- 上傳圖片建議小於 5MB；Worker 需支援 `image_base64` 才能使用上傳模式
+- 上傳圖片上限 3000 KB
