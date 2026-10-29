@@ -2,13 +2,16 @@
  * Cloudflare Worker for img-helper
  *
  * 可直接貼到 Cloudflare Workers；密碼 / Key 建議改成 Secrets：
- *   CUSTOM_PASSCODE、SERPAPI_KEY
+ *   CUSTOM_PASSCODE、SERPAPI_KEY、IMGBB_API_KEY（可選）
+ *
+ * 端點：
+ *   POST JSON { imageUrl }         → Google Lens（exact + visual）
+ *   POST multipart ?action=imgbb   → 代轉上傳到 ImgBB（expiration=300 秒）
  *
  * 準度策略：
- *   1) 先查 exact_matches（完全相同圖片）
- *   2) 再查 visual_matches（視覺相似）
- *   3) 使用台灣語系 hl=zh-tw、country=tw
- *   4) auto_crop=false，避免裁切後對錯主體
+ *   1) exact_matches + visual_matches
+ *   2) hl=zh-tw、country=tw
+ *   3) auto_crop=false
  */
 
 export default {
@@ -33,6 +36,7 @@ export default {
     const CUSTOM_PASSCODE =
       (env && env.CUSTOM_PASSCODE) || 'CHANGE_ME_PASSCODE';
     const SERPAPI_KEY = (env && env.SERPAPI_KEY) || 'CHANGE_ME_SERPAPI_KEY';
+    const IMGBB_API_KEY = (env && env.IMGBB_API_KEY) || '';
     // ==========================================
 
     const clientPasscode = request.headers.get('X-Access-Passcode');
@@ -44,28 +48,93 @@ export default {
       );
     }
 
+    const reqUrl = new URL(request.url);
+    const action = reqUrl.searchParams.get('action') || '';
+    const contentType = request.headers.get('content-type') || '';
+
+    if (action === 'imgbb' || contentType.includes('multipart/form-data')) {
+      try {
+        const form = await request.formData();
+        const file = form.get('image') || form.get('file') || form.get('fileToUpload');
+        if (!file || typeof file === 'string') {
+          return json({ error: 'Missing image file' }, 400, corsHeaders);
+        }
+
+        const expirationRaw = form.get('expiration');
+        const expiration = Number(expirationRaw) > 0 ? Number(expirationRaw) : 300;
+
+        let publicUrl = '';
+
+        if (IMGBB_API_KEY) {
+          const imgbbForm = new FormData();
+          imgbbForm.append('image', file, file.name || 'upload.jpg');
+          imgbbForm.append('name', file.name || 'upload');
+
+          const imgbbRes = await fetch(
+            `https://api.imgbb.com/1/upload?key=${encodeURIComponent(IMGBB_API_KEY)}&expiration=${expiration}`,
+            { method: 'POST', body: imgbbForm }
+          );
+          const imgbbData = await imgbbRes.json();
+          publicUrl =
+            (imgbbData.data && (imgbbData.data.url || imgbbData.data.display_url)) ||
+            '';
+
+          if (!imgbbRes.ok || !imgbbData.success || !publicUrl) {
+            return json(
+              {
+                error:
+                  (imgbbData.error && imgbbData.error.message) ||
+                  'ImgBB API upload failed',
+              },
+              502,
+              corsHeaders
+            );
+          }
+        } else {
+          // 無 API key：走 ImgBB 匿名 json 上傳，5 分鐘自動刪除
+          const anonForm = new FormData();
+          anonForm.append('source', file, file.name || 'upload.jpg');
+          anonForm.append('type', 'file');
+          anonForm.append('action', 'upload');
+          anonForm.append('expiration', 'PT5M');
+
+          const anonRes = await fetch('https://imgbb.com/json', {
+            method: 'POST',
+            body: anonForm,
+          });
+          const anonData = await anonRes.json();
+          publicUrl =
+            (anonData.image && (anonData.image.url || anonData.image.display_url)) ||
+            (anonData.data &&
+              anonData.data.image &&
+              (anonData.data.image.url || anonData.data.image.display_url)) ||
+            '';
+
+          if (!anonRes.ok || !publicUrl) {
+            return json(
+              { error: 'ImgBB anonymous upload failed' },
+              502,
+              corsHeaders
+            );
+          }
+        }
+
+        return json({ url: publicUrl, imageUrl: publicUrl }, 200, corsHeaders);
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500, corsHeaders);
+      }
+    }
+
     try {
       const body = await request.json();
       const imageUrl = body.imageUrl || body.image_url || '';
-      const imageBase64 = body.image_base64 || body.imageBase64 || '';
-      const mimeType = body.mime_type || body.mimeType || 'image/jpeg';
 
-      let imageId = '';
-      if (imageBase64) {
-        imageId = await uploadImageToSerpApi(imageBase64, mimeType, SERPAPI_KEY);
-      } else if (!imageUrl) {
-        return json(
-          { error: 'Missing imageUrl or image_base64' },
-          400,
-          corsHeaders
-        );
+      if (!imageUrl) {
+        return json({ error: 'Missing imageUrl' }, 400, corsHeaders);
       }
 
-      const source = imageId
-        ? { image_id: imageId }
-        : { url: imageUrl };
+      const source = { url: imageUrl };
 
-      // 並行查 Exact + Visual，提升「找來源」準度
       const [exactData, visualData] = await Promise.all([
         searchGoogleLens(SERPAPI_KEY, source, 'exact_matches'),
         searchGoogleLens(SERPAPI_KEY, source, 'visual_matches'),
@@ -78,8 +147,6 @@ export default {
         ? visualData.visual_matches
         : [];
 
-      // 前端相容：visual_matches 仍保留；同時回傳 exact_matches
-      // 也把 exact 放在前面合併成 matches，方便舊前端
       const merged = [
         ...exactMatches.map((m) => ({ ...m, match_type: 'exact' })),
         ...visualMatches.map((m) => ({ ...m, match_type: 'visual' })),
@@ -90,6 +157,7 @@ export default {
           exact_matches: exactMatches,
           visual_matches: visualMatches,
           matches: merged,
+          imageUrl,
           search_information:
             exactData.search_information || visualData.search_information || null,
           error: exactData.error || visualData.error || undefined,
@@ -118,59 +186,11 @@ async function searchGoogleLens(apiKey, source, type) {
     country: 'tw',
     auto_crop: 'false',
     api_key: apiKey,
+    url: source.url,
   });
-
-  if (source.image_id) {
-    params.set('image_id', source.image_id);
-  } else if (source.url) {
-    params.set('url', source.url);
-  }
 
   const response = await fetch(
     `https://serpapi.com/search.json?${params.toString()}`
   );
   return response.json();
-}
-
-function extensionFromMime(mimeType) {
-  const map = {
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-  };
-  return map[(mimeType || '').toLowerCase()] || 'jpg';
-}
-
-async function uploadImageToSerpApi(base64, mimeType, apiKey) {
-  const binary = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-
-  if (binary.byteLength > 3000 * 1024) {
-    throw new Error('Image too large (max 3000 KB)');
-  }
-
-  const form = new FormData();
-  const filename = `upload.${extensionFromMime(mimeType)}`;
-  form.append(
-    'image',
-    new Blob([binary], { type: mimeType || 'image/jpeg' }),
-    filename
-  );
-  form.append('api_key', apiKey);
-
-  const uploadResponse = await fetch('https://serpapi.com/image', {
-    method: 'POST',
-    body: form,
-  });
-
-  const uploadData = await uploadResponse.json();
-  if (!uploadResponse.ok || !uploadData.image_id) {
-    throw new Error(
-      uploadData.error ||
-        uploadData.message ||
-        'Failed to upload image to SerpApi'
-    );
-  }
-
-  return uploadData.image_id;
 }

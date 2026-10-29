@@ -6,8 +6,9 @@
 
 - Passcode 通過 `X-Access-Passcode` 標頭驗證，並自動存入 `localStorage`
 - 支援兩種圖片來源：公開網址，或本機上傳
+- 本機上傳會先送到 ImgBB（`expiration=300`，約 5 分鐘後自動刪除），取得公開網址後再呼叫 Worker
 - 輸入網址 / 選擇檔案後即時預覽
-- 呼叫 Cloudflare Worker API，渲染 `visual_matches` 結果卡片
+- 呼叫 Cloudflare Worker API，渲染 exact / visual 結果卡片
 - 自動標示常見社群平台來源（Instagram、Facebook、TikTok、X/Twitter、Threads、LinkedIn）
 
 ## 檔案結構
@@ -72,12 +73,9 @@ const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
 
 - 接受 `POST` 請求
 - 驗證標頭 `X-Access-Passcode`
-- 請求 body 為 JSON，兩種模式其一：
-  - 網址：`{ "imageUrl": "https://..." }`（也相容 `image_url`）
-  - 上傳：`{ "image_base64": "<base64>", "mime_type": "image/jpeg" }`
-- 上傳模式會先呼叫 SerpApi Image API 取得 `image_id`，再查 Google Lens
+- 搜尋請求 body：`{ "imageUrl": "https://..." }`（也相容 `image_url`）
 - Worker 會同時查 `exact_matches` 與 `visual_matches`（`hl=zh-tw`、`country=tw`、`auto_crop=false`）
-- 成功時回傳 `exact_matches` / `visual_matches` JSON
+- 可選：`POST ?action=imgbb` multipart，代轉上傳 ImgBB（瀏覽器 CORS 失敗時用）
 - 密碼錯誤時回傳 `401`
 
 本 repo 附有可部署的 `worker.js`。請用 Cloudflare Workers Secrets 設定：
@@ -85,6 +83,13 @@ const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
 ```bash
 npx wrangler secret put CUSTOM_PASSCODE
 npx wrangler secret put SERPAPI_KEY
+npx wrangler secret put IMGBB_API_KEY   # 可選；有 key 時走官方 API + 5 分鐘自動刪除
+```
+
+前端也可在瀏覽器 console 設定 ImgBB key：
+
+```js
+localStorage.setItem('img-helper-imgbb-key', 'YOUR_IMGBB_API_KEY')
 ```
 
 不要把 Passcode / API Key 寫死在程式碼裡。
@@ -94,4 +99,4 @@ npx wrangler secret put SERPAPI_KEY
 - 此工具僅供私人使用，請勿公開分享 Passcode
 - Passcode 存在使用者本機瀏覽器，清除網站資料後需重新輸入
 - 圖片網址必須為可公開存取的 `http(s)` 連結
-- 上傳圖片上限 3000 KB
+- 上傳圖片上限 3000 KB；ImgBB 圖會在約 5 分鐘後自動刪除

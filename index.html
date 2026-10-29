@@ -458,7 +458,7 @@
                 accept="image/*"
               />
               <div class="dropzone-title">點擊或拖曳圖片到這裡</div>
-              <div class="dropzone-hint">支援 JPG、PNG、WEBP（上限 3000 KB）</div>
+              <div class="dropzone-hint">支援 JPG、PNG、WEBP（上限 3000 KB；經 ImgBB 上傳，5 分鐘後自動刪除）</div>
               <div class="dropzone-file" id="file-name"></div>
             </div>
           </div>
@@ -481,6 +481,14 @@
 
   <script>
     const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
+    const IMGBB_API_URL = 'https://api.imgbb.com/1/upload';
+    const IMGBB_ANON_URL = 'https://imgbb.com/json';
+    // ImgBB 官方 API key（可改成你的 key；先嘗試 key=free，失敗再走匿名上傳）
+    const IMGBB_API_KEY =
+      localStorage.getItem('img-helper-imgbb-key') || 'free';
+    // 自動刪除：5 分鐘 = 300 秒（官方 API）；匿名上傳用 PT5M
+    const IMGBB_EXPIRATION_SEC = 300;
+    const IMGBB_EXPIRATION_ANON = 'PT5M';
     const PASSCODE_KEY = 'img-helper-passcode';
     const MAX_UPLOAD_BYTES = 3000 * 1024;
     const SOCIAL_HOSTS = [
@@ -802,52 +810,106 @@
       return { exactCount: exact.length, visualCount: visual.length };
     }
 
-    function fileToDataUrl(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(reader.error || new Error('讀取失敗'));
-        reader.readAsDataURL(file);
-      });
+    function extractImgBBUrl(data) {
+      const candidates = [
+        data && data.data && data.data.url,
+        data && data.data && data.data.display_url,
+        data && data.data && data.data.image && data.data.image.url,
+        data && data.image && data.image.url,
+        data && data.image && data.image.display_url,
+        data && data.image && data.image.image && data.image.image.url,
+        data && data.url,
+      ];
+      const url = candidates.find((v) => typeof v === 'string' && /^https?:\/\//i.test(v));
+      return url || '';
     }
 
-    function loadImage(src) {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('圖片載入失敗'));
-        img.src = src;
+    async function uploadImgBBOfficial(file) {
+      const formData = new FormData();
+      formData.append('image', file, file.name || 'upload.jpg');
+      formData.append('name', file.name || 'upload');
+
+      const endpoint =
+        `${IMGBB_API_URL}?key=${encodeURIComponent(IMGBB_API_KEY)}` +
+        `&expiration=${IMGBB_EXPIRATION_SEC}`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
       });
+      const data = await response.json().catch(() => ({}));
+      const url = extractImgBBUrl(data);
+
+      if (!response.ok || !data.success || !url) {
+        throw new Error(
+          (data && data.error && (data.error.message || data.error)) ||
+            'ImgBB API 上傳失敗'
+        );
+      }
+      return url;
     }
 
-    // 上傳前壓縮，提高 SerpApi 接受率與比對穩定性
-    async function prepareUploadPayload(file) {
-      const originalDataUrl = await fileToDataUrl(file);
-      const img = await loadImage(originalDataUrl);
+    async function uploadImgBBAnonymous(file) {
+      const formData = new FormData();
+      formData.append('source', file, file.name || 'upload.jpg');
+      formData.append('type', 'file');
+      formData.append('action', 'upload');
+      formData.append('expiration', IMGBB_EXPIRATION_ANON);
 
-      const maxEdge = 1600;
-      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
-      const width = Math.max(1, Math.round(img.width * scale));
-      const height = Math.max(1, Math.round(img.height * scale));
+      const response = await fetch(IMGBB_ANON_URL, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      const url = extractImgBBUrl(data);
 
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
+      if (!response.ok || !url) {
+        throw new Error(
+          (data && data.error && (data.error.message || data.status_txt)) ||
+            'ImgBB 匿名上傳失敗'
+        );
+      }
+      return url;
+    }
 
-      let quality = 0.9;
-      let dataUrl = canvas.toDataURL('image/jpeg', quality);
-      while (dataUrl.length > 650000 && quality > 0.5) {
-        quality -= 0.08;
-        dataUrl = canvas.toDataURL('image/jpeg', quality);
+    // 瀏覽器直連被 CORS 擋住時，由 Worker 代轉上傳 ImgBB
+    async function uploadImgBBViaWorker(file, passcode) {
+      const formData = new FormData();
+      formData.append('image', file, file.name || 'upload.jpg');
+      formData.append('expiration', String(IMGBB_EXPIRATION_SEC));
+
+      const response = await fetch(`${WORKER_URL}?action=imgbb`, {
+        method: 'POST',
+        headers: {
+          'X-Access-Passcode': passcode,
+        },
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `ImgBB 代理上傳失敗（HTTP ${response.status}）`);
       }
 
-      const commaIndex = dataUrl.indexOf(',');
-      return {
-        image_base64: commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl,
-        mime_type: 'image/jpeg',
-      };
+      const url = data.url || data.imageUrl || '';
+      if (!/^https?:\/\//i.test(url)) {
+        throw new Error('ImgBB 未回傳有效網址');
+      }
+      return url;
+    }
+
+    async function uploadToImgBB(file, passcode) {
+      try {
+        return await uploadImgBBOfficial(file);
+      } catch (officialErr) {
+        console.warn('ImgBB official upload failed:', officialErr);
+        try {
+          return await uploadImgBBAnonymous(file);
+        } catch (anonErr) {
+          console.warn('ImgBB anonymous upload failed, fallback to Worker:', anonErr);
+          return uploadImgBBViaWorker(file, passcode);
+        }
+      }
     }
 
     form.addEventListener('submit', async (e) => {
@@ -860,37 +922,32 @@
         return;
       }
 
-      let payload;
+      let imageUrl = '';
 
       if (sourceMode === 'url') {
-        const imageUrl = imageUrlInput.value.trim();
+        imageUrl = imageUrlInput.value.trim();
         if (!isValidImageUrl(imageUrl)) {
           setStatus('❌ 請輸入有效的圖片網址', 'error');
           return;
         }
-        // 同時送 imageUrl / image_url，相容舊版與新版 Worker
-        payload = { imageUrl, image_url: imageUrl };
-      } else {
-        if (!selectedFile) {
-          setStatus('❌ 請先上傳圖片', 'error');
-          return;
-        }
-
-        try {
-          payload = await prepareUploadPayload(selectedFile);
-        } catch (err) {
-          console.error(err);
-          setStatus('❌ 讀取圖片失敗，請再試一次', 'error');
-          return;
-        }
+      } else if (!selectedFile) {
+        setStatus('❌ 請先上傳圖片', 'error');
+        return;
       }
 
       localStorage.setItem(PASSCODE_KEY, passcode);
       resultsEl.innerHTML = '';
-      setStatus('🔍 分析搜尋中，請稍候...', 'loading');
       submitBtn.disabled = true;
 
       try {
+        if (sourceMode === 'upload') {
+          setStatus('☁️ 上傳圖片至 ImgBB（5 分鐘後自動刪除）...', 'loading');
+          imageUrl = await uploadToImgBB(selectedFile, passcode);
+        }
+
+        const payload = { imageUrl, image_url: imageUrl };
+        setStatus('🔍 分析搜尋中，請稍候...', 'loading');
+
         const response = await fetch(WORKER_URL, {
           method: 'POST',
           headers: {
@@ -937,7 +994,7 @@
       } catch (err) {
         console.error(err);
         setStatus(
-          '❌ 連線失敗，請檢查網路或 Worker 服務是否正常',
+          `❌ ${err && err.message ? err.message : '連線失敗，請檢查網路或服務是否正常'}`,
           'error'
         );
       } finally {
