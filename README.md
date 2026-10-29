@@ -1,6 +1,6 @@
 # img-helper
 
-極簡暗色系單頁前端，用於呼叫 Cloudflare Worker 進行以圖搜圖。僅供個人與朋友私下使用。
+極簡暗色系單頁前端，用於呼叫 Cloudflare Worker 進行以圖搜圖。供教學使用。
 
 ## 功能
 
@@ -63,10 +63,10 @@ https://<你的帳號>.github.io/img-helper/
 
 ## 後端設定
 
-前端已寫死 Worker 位址：
+請在 `index.html` 自行設定你的 Worker 位址，例如：
 
 ```js
-const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
+const WORKER_URL = 'https://your-worker.example.workers.dev';
 ```
 
 請確認該 Worker：
@@ -92,7 +92,7 @@ npx wrangler secret put IMGBB_API_KEY   # 可選；有 key 時走官方 API + 5 
 
 ## 注意事項
 
-- 此工具僅供私人使用，請勿公開分享 Passcode
+- 供教學使用
 - Passcode / ImgBB Key 存在使用者本機瀏覽器，清除網站資料後需重新輸入
 - 圖片網址必須為可公開存取的 `http(s)` 連結
 - 上傳圖片上限 3000 KB；ImgBB 圖會在約 5 分鐘後自動刪除
