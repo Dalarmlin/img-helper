@@ -112,6 +112,87 @@
       color: #64748b;
     }
 
+    .source-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin-bottom: 0.85rem;
+      padding: 0.3rem;
+      background: var(--input-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+    }
+
+    .source-tab {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .source-tab.active {
+      background: var(--card-bg);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    }
+
+    .source-panel {
+      display: none;
+    }
+
+    .source-panel.active {
+      display: block;
+    }
+
+    .dropzone {
+      position: relative;
+      border: 1.5px dashed var(--card-border);
+      border-radius: 10px;
+      background: var(--input-bg);
+      padding: 1.4rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .dropzone:hover,
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.06);
+    }
+
+    .dropzone-title {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .dropzone-hint {
+      margin-top: 0.35rem;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .dropzone-file {
+      margin-top: 0.55rem;
+      color: var(--accent);
+      font-size: 0.85rem;
+      word-break: break-all;
+    }
+
+    .dropzone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
     .preview-wrap {
       margin-top: 1rem;
       display: none;
@@ -299,18 +380,43 @@
         </div>
 
         <div class="form-group">
-          <label for="image-url">Image URL</label>
-          <input
-            type="url"
-            id="image-url"
-            name="image-url"
-            placeholder="https://example.com/image.jpg"
-            required
-          />
+          <label>Image Source</label>
+          <div class="source-tabs" role="tablist" aria-label="圖片來源">
+            <button type="button" class="source-tab active" data-mode="url" role="tab" aria-selected="true">
+              網址
+            </button>
+            <button type="button" class="source-tab" data-mode="upload" role="tab" aria-selected="false">
+              上傳
+            </button>
+          </div>
+
+          <div class="source-panel active" id="panel-url" data-panel="url">
+            <input
+              type="url"
+              id="image-url"
+              name="image-url"
+              placeholder="https://example.com/image.jpg"
+            />
+          </div>
+
+          <div class="source-panel" id="panel-upload" data-panel="upload">
+            <div class="dropzone" id="dropzone">
+              <input
+                type="file"
+                id="image-file"
+                name="image-file"
+                accept="image/*"
+              />
+              <div class="dropzone-title">點擊或拖曳圖片到這裡</div>
+              <div class="dropzone-hint">支援 JPG、PNG、WEBP、GIF（建議 &lt; 5MB）</div>
+              <div class="dropzone-file" id="file-name"></div>
+            </div>
+          </div>
+
           <div class="preview-wrap" id="preview-wrap">
             <img id="preview-img" alt="圖片預覽" />
           </div>
-          <p class="preview-error" id="preview-error">無法載入預覽，請確認網址是否為有效圖片。</p>
+          <p class="preview-error" id="preview-error">無法載入預覽，請確認網址或檔案是否為有效圖片。</p>
         </div>
 
         <button type="submit" id="submit-btn">開始比對分析</button>
@@ -326,6 +432,7 @@
   <script>
     const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
     const PASSCODE_KEY = 'img-helper-passcode';
+    const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
     const SOCIAL_HOSTS = [
       'instagram.com',
       'facebook.com',
@@ -338,6 +445,9 @@
 
     const passcodeInput = document.getElementById('passcode');
     const imageUrlInput = document.getElementById('image-url');
+    const imageFileInput = document.getElementById('image-file');
+    const dropzone = document.getElementById('dropzone');
+    const fileNameEl = document.getElementById('file-name');
     const form = document.getElementById('search-form');
     const submitBtn = document.getElementById('submit-btn');
     const statusEl = document.getElementById('status');
@@ -345,8 +455,13 @@
     const previewWrap = document.getElementById('preview-wrap');
     const previewImg = document.getElementById('preview-img');
     const previewError = document.getElementById('preview-error');
+    const sourceTabs = document.querySelectorAll('.source-tab');
+    const sourcePanels = document.querySelectorAll('.source-panel');
 
-    // Restore passcode from localStorage
+    let sourceMode = 'url';
+    let selectedFile = null;
+    let objectUrl = null;
+
     const savedPasscode = localStorage.getItem(PASSCODE_KEY);
     if (savedPasscode) {
       passcodeInput.value = savedPasscode;
@@ -356,24 +471,22 @@
       localStorage.setItem(PASSCODE_KEY, passcodeInput.value);
     });
 
-    function isValidImageUrl(value) {
-      try {
-        const url = new URL(value);
-        return url.protocol === 'http:' || url.protocol === 'https:';
-      } catch {
-        return false;
+    function clearObjectUrl() {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
       }
     }
 
-    function updatePreview() {
-      const url = imageUrlInput.value.trim();
+    function hidePreview() {
+      previewWrap.classList.remove('visible');
       previewError.classList.remove('visible');
+      previewImg.removeAttribute('src');
+      clearObjectUrl();
+    }
 
-      if (!url || !isValidImageUrl(url)) {
-        previewWrap.classList.remove('visible');
-        previewImg.removeAttribute('src');
-        return;
-      }
+    function showPreviewFromSrc(src, isObjectUrl) {
+      previewError.classList.remove('visible');
 
       previewImg.onload = () => {
         previewWrap.classList.add('visible');
@@ -385,13 +498,119 @@
         previewError.classList.add('visible');
       };
 
-      previewImg.src = url;
+      if (!isObjectUrl) {
+        clearObjectUrl();
+      }
+
+      previewImg.src = src;
+    }
+
+    function setSourceMode(mode) {
+      sourceMode = mode;
+
+      sourceTabs.forEach((tab) => {
+        const active = tab.dataset.mode === mode;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+
+      sourcePanels.forEach((panel) => {
+        panel.classList.toggle('active', panel.dataset.panel === mode);
+      });
+
+      hidePreview();
+
+      if (mode === 'url') {
+        selectedFile = null;
+        imageFileInput.value = '';
+        fileNameEl.textContent = '';
+        updateUrlPreview();
+      } else if (selectedFile) {
+        previewSelectedFile(selectedFile);
+      }
+    }
+
+    sourceTabs.forEach((tab) => {
+      tab.addEventListener('click', () => setSourceMode(tab.dataset.mode));
+    });
+
+    function isValidImageUrl(value) {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }
+
+    function updateUrlPreview() {
+      const url = imageUrlInput.value.trim();
+
+      if (!url || !isValidImageUrl(url)) {
+        hidePreview();
+        return;
+      }
+
+      showPreviewFromSrc(url, false);
     }
 
     let previewTimer;
     imageUrlInput.addEventListener('input', () => {
       clearTimeout(previewTimer);
-      previewTimer = setTimeout(updatePreview, 300);
+      previewTimer = setTimeout(updateUrlPreview, 300);
+    });
+
+    function previewSelectedFile(file) {
+      clearObjectUrl();
+      objectUrl = URL.createObjectURL(file);
+      fileNameEl.textContent = `${file.name}（${(file.size / 1024).toFixed(0)} KB）`;
+      showPreviewFromSrc(objectUrl, true);
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        setStatus('❌ 請選擇圖片檔案', 'error');
+        return;
+      }
+
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setStatus('❌ 圖片過大，請壓縮至 5MB 以內', 'error');
+        return;
+      }
+
+      selectedFile = file;
+      setStatus('', '');
+      previewSelectedFile(file);
+    }
+
+    imageFileInput.addEventListener('change', () => {
+      const file = imageFileInput.files && imageFileInput.files[0];
+      handleFile(file);
+    });
+
+    ['dragenter', 'dragover'].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) return;
+      imageFileInput.files = e.dataTransfer.files;
+      handleFile(file);
     });
 
     function isSocialPlatform(link) {
@@ -473,20 +692,59 @@
       resultsEl.appendChild(fragment);
     }
 
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result || '');
+          const commaIndex = result.indexOf(',');
+          resolve({
+            dataUrl: result,
+            base64: commaIndex >= 0 ? result.slice(commaIndex + 1) : result,
+            mimeType: file.type || 'image/jpeg',
+          });
+        };
+        reader.onerror = () => reject(reader.error || new Error('讀取失敗'));
+        reader.readAsDataURL(file);
+      });
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const passcode = passcodeInput.value.trim();
-      const imageUrl = imageUrlInput.value.trim();
 
       if (!passcode) {
         setStatus('❌ 請輸入通行密碼', 'error');
         return;
       }
 
-      if (!isValidImageUrl(imageUrl)) {
-        setStatus('❌ 請輸入有效的圖片網址', 'error');
-        return;
+      let payload;
+
+      if (sourceMode === 'url') {
+        const imageUrl = imageUrlInput.value.trim();
+        if (!isValidImageUrl(imageUrl)) {
+          setStatus('❌ 請輸入有效的圖片網址', 'error');
+          return;
+        }
+        payload = { image_url: imageUrl };
+      } else {
+        if (!selectedFile) {
+          setStatus('❌ 請先上傳圖片', 'error');
+          return;
+        }
+
+        try {
+          const encoded = await fileToBase64(selectedFile);
+          payload = {
+            image_base64: encoded.base64,
+            mime_type: encoded.mimeType,
+          };
+        } catch (err) {
+          console.error(err);
+          setStatus('❌ 讀取圖片失敗，請再試一次', 'error');
+          return;
+        }
       }
 
       localStorage.setItem(PASSCODE_KEY, passcode);
@@ -501,7 +759,7 @@
             'Content-Type': 'application/json',
             'X-Access-Passcode': passcode,
           },
-          body: JSON.stringify({ image_url: imageUrl }),
+          body: JSON.stringify(payload),
         });
 
         if (response.status === 401) {

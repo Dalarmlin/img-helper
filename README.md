@@ -5,7 +5,8 @@
 ## 功能
 
 - Passcode 通過 `X-Access-Passcode` 標頭驗證，並自動存入 `localStorage`
-- 輸入圖片公開網址後即時預覽
+- 支援兩種圖片來源：公開網址，或本機上傳
+- 輸入網址 / 選擇檔案後即時預覽
 - 呼叫 Cloudflare Worker API，渲染 `visual_matches` 結果卡片
 - 自動標示常見社群平台來源（Instagram、Facebook、TikTok、X/Twitter、Threads、LinkedIn）
 
@@ -54,7 +55,7 @@ https://<你的帳號>.github.io/img-helper/
 
 1. 打開部署後的網頁
 2. 輸入通行密碼（Passcode）
-3. 貼上目標圖片的公開網址
+3. 選擇「網址」貼上公開圖片連結，或切換「上傳」選本機圖片
 4. 點擊「開始比對分析」
 
 密碼會自動保存在瀏覽器 `localStorage`，下次開啟會自動填入。
@@ -71,7 +72,9 @@ const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
 
 - 接受 `POST` 請求
 - 驗證標頭 `X-Access-Passcode`
-- 請求 body 為 JSON：`{ "image_url": "https://..." }`
+- 請求 body 為 JSON，兩種模式其一：
+  - 網址：`{ "image_url": "https://..." }`
+  - 上傳：`{ "image_base64": "<base64>", "mime_type": "image/jpeg" }`
 - 成功時回傳含 `visual_matches` 陣列的 JSON
 - 密碼錯誤時回傳 `401`
 
@@ -82,3 +85,4 @@ const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
 - 此工具僅供私人使用，請勿公開分享 Passcode
 - Passcode 存在使用者本機瀏覽器，清除網站資料後需重新輸入
 - 圖片網址必須為可公開存取的 `http(s)` 連結
+- 上傳圖片建議小於 5MB；Worker 需支援 `image_base64` 才能使用上傳模式
