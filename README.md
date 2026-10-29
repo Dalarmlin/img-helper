@@ -76,7 +76,8 @@ const WORKER_URL = 'https://img-helper.brianlin2021.workers.dev';
   - 網址：`{ "imageUrl": "https://..." }`（也相容 `image_url`）
   - 上傳：`{ "image_base64": "<base64>", "mime_type": "image/jpeg" }`
 - 上傳模式會先呼叫 SerpApi Image API 取得 `image_id`，再查 Google Lens
-- 成功時回傳含 `visual_matches` 陣列的 JSON
+- Worker 會同時查 `exact_matches` 與 `visual_matches`（`hl=zh-tw`、`country=tw`、`auto_crop=false`）
+- 成功時回傳 `exact_matches` / `visual_matches` JSON
 - 密碼錯誤時回傳 `401`
 
 本 repo 附有可部署的 `worker.js`。請用 Cloudflare Workers Secrets 設定：

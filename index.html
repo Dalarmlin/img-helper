@@ -281,8 +281,9 @@
       border-radius: var(--radius);
       padding: 1.1rem 1.25rem;
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 0.9rem;
       transition: border-color 0.2s;
     }
 
@@ -314,6 +315,55 @@
       border-radius: 999px;
       letter-spacing: 0.02em;
       text-transform: uppercase;
+    }
+
+    .badge-exact {
+      background: #4ade80;
+      color: #052e16;
+    }
+
+    .badge-visual {
+      background: #64748b;
+      color: #f8fafc;
+    }
+
+    .badge-social {
+      background: var(--badge-bg);
+      color: var(--badge-text);
+    }
+
+    .section-title {
+      margin: 0.4rem 0 0.2rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .result-thumb {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      background: #020617;
+      flex-shrink: 0;
+    }
+
+    .result-body {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .result-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      justify-content: flex-end;
     }
 
     .result-link {
@@ -632,81 +682,172 @@
       statusEl.className = type || '';
     }
 
-    function renderResults(matches) {
+    function createMatchCard(match, matchType) {
+      const title =
+        match.title || match.source || match.link || '未命名來源';
+      const link = match.link || match.source_url || match.url || '';
+      const source = match.source || '';
+      const thumb =
+        match.thumbnail || match.image || match.thumbnail_url || '';
+
+      const card = document.createElement('article');
+      card.className = 'result-card';
+
+      if (thumb) {
+        const img = document.createElement('img');
+        img.className = 'result-thumb';
+        img.src = thumb;
+        img.alt = '';
+        img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
+        card.appendChild(img);
+      }
+
+      const body = document.createElement('div');
+      body.className = 'result-body';
+
+      const header = document.createElement('div');
+      header.className = 'result-header';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'result-title';
+      titleEl.textContent = title;
+      header.appendChild(titleEl);
+
+      const badges = document.createElement('div');
+      badges.className = 'result-badges';
+
+      const typeBadge = document.createElement('span');
+      typeBadge.className =
+        'badge ' + (matchType === 'exact' ? 'badge-exact' : 'badge-visual');
+      typeBadge.textContent =
+        matchType === 'exact' ? 'Exact Match' : 'Visual Match';
+      badges.appendChild(typeBadge);
+
+      if (isSocialPlatform(link) || isSocialPlatform(source)) {
+        const socialBadge = document.createElement('span');
+        socialBadge.className = 'badge badge-social';
+        socialBadge.textContent = 'Social Platform';
+        badges.appendChild(socialBadge);
+      }
+
+      header.appendChild(badges);
+      body.appendChild(header);
+
+      if (link) {
+        const a = document.createElement('a');
+        a.className = 'result-link';
+        a.href = link;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = link;
+        body.appendChild(a);
+      }
+
+      if (source && source !== title) {
+        const meta = document.createElement('div');
+        meta.className = 'result-meta';
+        meta.textContent = source;
+        body.appendChild(meta);
+      }
+
+      card.appendChild(body);
+      return card;
+    }
+
+    function renderSection(title, matches, matchType, fragment) {
+      if (!matches.length) return;
+
+      const heading = document.createElement('h2');
+      heading.className = 'section-title';
+      heading.textContent = title;
+      fragment.appendChild(heading);
+
+      matches.forEach((match) => {
+        fragment.appendChild(createMatchCard(match, matchType));
+      });
+    }
+
+    function renderResults(data) {
       resultsEl.innerHTML = '';
 
-      if (!Array.isArray(matches) || matches.length === 0) {
+      const exact = Array.isArray(data.exact_matches) ? data.exact_matches : [];
+      let visual = Array.isArray(data.visual_matches) ? data.visual_matches : [];
+
+      // 舊 Worker 可能只有 visual_matches / matches
+      if (!exact.length && !visual.length && Array.isArray(data.matches)) {
+        visual = data.matches;
+      }
+
+      if (!exact.length && !visual.length) {
         resultsEl.innerHTML =
-          '<p class="empty-state">找不到相符的視覺結果。</p>';
+          '<p class="empty-state">找不到相符結果。可試另一張更清晰、裁切較少的圖。</p>';
         return;
       }
 
-      const fragment = document.createDocumentFragment();
-
-      matches.forEach((match) => {
-        const title =
-          match.title || match.source || match.link || '未命名來源';
-        const link = match.link || match.source_url || match.url || '';
-        const source = match.source || '';
-
-        const card = document.createElement('article');
-        card.className = 'result-card';
-
-        const header = document.createElement('div');
-        header.className = 'result-header';
-
-        const titleEl = document.createElement('div');
-        titleEl.className = 'result-title';
-        titleEl.textContent = title;
-        header.appendChild(titleEl);
-
-        if (isSocialPlatform(link) || isSocialPlatform(source)) {
-          const badge = document.createElement('span');
-          badge.className = 'badge';
-          badge.textContent = 'Social Platform';
-          header.appendChild(badge);
-        }
-
-        card.appendChild(header);
-
-        if (link) {
-          const a = document.createElement('a');
-          a.className = 'result-link';
-          a.href = link;
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          a.textContent = link;
-          card.appendChild(a);
-        }
-
-        if (source && source !== title) {
-          const meta = document.createElement('div');
-          meta.className = 'result-meta';
-          meta.textContent = source;
-          card.appendChild(meta);
-        }
-
-        fragment.appendChild(card);
+      // 去掉 visual 裡與 exact 重複的連結，避免清單雜訊
+      const exactLinks = new Set(
+        exact.map((m) => (m.link || m.url || '').toLowerCase()).filter(Boolean)
+      );
+      visual = visual.filter((m) => {
+        const link = (m.link || m.url || '').toLowerCase();
+        return !link || !exactLinks.has(link);
       });
 
+      const fragment = document.createDocumentFragment();
+      renderSection(`完全相符（${exact.length}）`, exact, 'exact', fragment);
+      renderSection(`視覺相似（${visual.length}）`, visual, 'visual', fragment);
       resultsEl.appendChild(fragment);
+
+      return { exactCount: exact.length, visualCount: visual.length };
     }
 
-    function fileToBase64(file) {
+    function fileToDataUrl(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => {
-          const result = String(reader.result || '');
-          const commaIndex = result.indexOf(',');
-          resolve({
-            dataUrl: result,
-            base64: commaIndex >= 0 ? result.slice(commaIndex + 1) : result,
-            mimeType: file.type || 'image/jpeg',
-          });
-        };
+        reader.onload = () => resolve(String(reader.result || ''));
         reader.onerror = () => reject(reader.error || new Error('讀取失敗'));
         reader.readAsDataURL(file);
       });
+    }
+
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('圖片載入失敗'));
+        img.src = src;
+      });
+    }
+
+    // 上傳前壓縮，提高 SerpApi 接受率與比對穩定性
+    async function prepareUploadPayload(file) {
+      const originalDataUrl = await fileToDataUrl(file);
+      const img = await loadImage(originalDataUrl);
+
+      const maxEdge = 1600;
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+      const width = Math.max(1, Math.round(img.width * scale));
+      const height = Math.max(1, Math.round(img.height * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let quality = 0.9;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length > 650000 && quality > 0.5) {
+        quality -= 0.08;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+
+      const commaIndex = dataUrl.indexOf(',');
+      return {
+        image_base64: commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl,
+        mime_type: 'image/jpeg',
+      };
     }
 
     form.addEventListener('submit', async (e) => {
@@ -736,11 +877,7 @@
         }
 
         try {
-          const encoded = await fileToBase64(selectedFile);
-          payload = {
-            image_base64: encoded.base64,
-            mime_type: encoded.mimeType,
-          };
+          payload = await prepareUploadPayload(selectedFile);
         } catch (err) {
           console.error(err);
           setStatus('❌ 讀取圖片失敗，請再試一次', 'error');
@@ -769,18 +906,34 @@
         }
 
         if (!response.ok) {
+          let detail = '';
+          try {
+            const errBody = await response.json();
+            detail = errBody.error ? `：${errBody.error}` : '';
+          } catch (_) {
+            /* ignore */
+          }
           setStatus(
-            `❌ 請求失敗（HTTP ${response.status}），請稍後再試`,
+            `❌ 請求失敗（HTTP ${response.status}）${detail}`,
             'error'
           );
           return;
         }
 
         const data = await response.json();
-        const matches = data.visual_matches || data.matches || [];
+        if (data.error && !data.exact_matches && !data.visual_matches) {
+          setStatus(`❌ ${data.error}`, 'error');
+          return;
+        }
 
-        setStatus(`✅ 找到 ${matches.length} 筆結果`, 'success');
-        renderResults(matches);
+        const counts = renderResults(data) || {
+          exactCount: 0,
+          visualCount: 0,
+        };
+        setStatus(
+          `✅ Exact ${counts.exactCount}／Visual ${counts.visualCount}`,
+          'success'
+        );
       } catch (err) {
         console.error(err);
         setStatus(
