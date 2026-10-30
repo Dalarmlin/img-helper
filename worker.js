@@ -192,7 +192,7 @@ async function hostOriginalImage(file) {
     errors.push(`img402: ${err.message || err}`);
   }
 
-  throw new Error(`臨時圖床上傳失敗：${errors.join(' | ')}`);
+  throw new Error(`Temporary host upload failed: ${errors.join(' | ')}`);
 }
 
 async function searchGoogleLens(apiKey, source, type) {
