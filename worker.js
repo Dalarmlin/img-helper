@@ -201,6 +201,7 @@ async function searchGoogleLens(apiKey, source, type) {
     type,
     hl: 'zh-tw',
     country: 'tw',
+    safe: 'off',
     auto_crop: 'false',
     api_key: apiKey,
     url: source.url,
