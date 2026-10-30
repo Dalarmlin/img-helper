@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -412,7 +412,7 @@
   <div class="container">
     <header>
       <h1>img-helper</h1>
-      <p>以圖搜圖 · 私人使用</p>
+      <p>Reverse image search · for teaching &amp; learning</p>
     </header>
 
     <main class="card">
@@ -423,7 +423,7 @@
             type="password"
             id="passcode"
             name="passcode"
-            placeholder="輸入通行密碼"
+            placeholder="Enter passcode"
             required
             autocomplete="current-password"
           />
@@ -431,12 +431,12 @@
 
         <div class="form-group">
           <label>Image Source</label>
-          <div class="source-tabs" role="tablist" aria-label="圖片來源">
+          <div class="source-tabs" role="tablist" aria-label="Image source">
             <button type="button" class="source-tab active" data-mode="url" role="tab" aria-selected="true">
-              網址
+              URL
             </button>
             <button type="button" class="source-tab" data-mode="upload" role="tab" aria-selected="false">
-              上傳
+              Upload
             </button>
           </div>
 
@@ -457,26 +457,26 @@
                 name="image-file"
                 accept="image/*"
               />
-              <div class="dropzone-title">點擊或拖曳圖片到這裡</div>
-              <div class="dropzone-hint">支援 JPG、PNG、WEBP（上限 5 MB；原始檔上傳臨時圖床，約 5 分鐘後刪除）</div>
+              <div class="dropzone-title">Click or drag an image here</div>
+              <div class="dropzone-hint">JPG, PNG, or WEBP up to 5 MB. Original file is uploaded to a temporary host (usually expires in ~5 minutes; fallback hosts may keep files up to 1 hour).</div>
               <div class="dropzone-file" id="file-name"></div>
             </div>
           </div>
 
           <div class="preview-wrap" id="preview-wrap">
-            <img id="preview-img" alt="圖片預覽" />
+            <img id="preview-img" alt="Image preview" />
           </div>
-          <p class="preview-error" id="preview-error">無法載入預覽，請確認網址或檔案是否為有效圖片。</p>
+          <p class="preview-error" id="preview-error">Could not load preview. Check that the URL or file is a valid image.</p>
         </div>
 
-        <button type="submit" id="submit-btn">開始比對分析</button>
+        <button type="submit" id="submit-btn">Start analysis</button>
       </form>
 
       <div id="status" role="status" aria-live="polite"></div>
       <div id="results"></div>
     </main>
 
-    <footer>img-helper · 僅供私人使用</footer>
+    <footer>img-helper · for teaching &amp; learning</footer>
   </div>
 
   <script>
@@ -613,7 +613,7 @@
     function previewSelectedFile(file) {
       clearObjectUrl();
       objectUrl = URL.createObjectURL(file);
-      fileNameEl.textContent = `${file.name}（${(file.size / 1024).toFixed(0)} KB）`;
+      fileNameEl.textContent = `${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
       showPreviewFromSrc(objectUrl, true);
     }
 
@@ -621,12 +621,12 @@
       if (!file) return;
 
       if (!file.type.startsWith('image/')) {
-        setStatus('❌ 請選擇圖片檔案', 'error');
+        setStatus('❌ Please choose an image file', 'error');
         return;
       }
 
       if (file.size > MAX_UPLOAD_BYTES) {
-        setStatus('❌ 圖片過大，請壓縮至 5 MB 以內', 'error');
+        setStatus('❌ Image is too large. Please keep it under 5 MB', 'error');
         return;
       }
 
@@ -684,7 +684,7 @@
 
     function createMatchCard(match, matchType) {
       const title =
-        match.title || match.source || match.link || '未命名來源';
+        match.title || match.source || match.link || 'Untitled source';
       const link = match.link || match.source_url || match.url || '';
       const source = match.source || '';
       const thumb =
@@ -774,18 +774,18 @@
       const exact = Array.isArray(data.exact_matches) ? data.exact_matches : [];
       let visual = Array.isArray(data.visual_matches) ? data.visual_matches : [];
 
-      // 舊 Worker 可能只有 visual_matches / matches
+      // Older workers may only return visual_matches / matches
       if (!exact.length && !visual.length && Array.isArray(data.matches)) {
         visual = data.matches;
       }
 
       if (!exact.length && !visual.length) {
         resultsEl.innerHTML =
-          '<p class="empty-state">找不到相符結果。可試另一張更清晰、裁切較少的圖。</p>';
+          '<p class="empty-state">No matches found. Try a clearer image with less cropping.</p>';
         return;
       }
 
-      // 去掉 visual 裡與 exact 重複的連結，避免清單雜訊
+      // Drop visual results that duplicate exact links
       const exactLinks = new Set(
         exact.map((m) => (m.link || m.url || '').toLowerCase()).filter(Boolean)
       );
@@ -795,14 +795,14 @@
       });
 
       const fragment = document.createDocumentFragment();
-      renderSection(`完全相符（${exact.length}）`, exact, 'exact', fragment);
-      renderSection(`視覺相似（${visual.length}）`, visual, 'visual', fragment);
+      renderSection(`Exact matches (${exact.length})`, exact, 'exact', fragment);
+      renderSection(`Visual matches (${visual.length})`, visual, 'visual', fragment);
       resultsEl.appendChild(fragment);
 
       return { exactCount: exact.length, visualCount: visual.length };
     }
 
-    // 原始檔經 Worker 轉送臨時圖床（不用 base64 / 不用 ImgBB）
+    // Upload the original file via Worker to a temporary host
     async function uploadOriginalImage(file, passcode) {
       const formData = new FormData();
       formData.append('image', file, file.name || 'upload.jpg');
@@ -817,12 +817,14 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || `臨時圖床上傳失敗（HTTP ${response.status}）`);
+        throw new Error(
+          data.error || `Temporary host upload failed (HTTP ${response.status})`
+        );
       }
 
       const url = data.url || data.imageUrl || '';
       if (!/^https?:\/\//i.test(url)) {
-        throw new Error('臨時圖床未回傳有效網址');
+        throw new Error('Temporary host did not return a valid URL');
       }
       return url;
     }
@@ -833,7 +835,7 @@
       const passcode = passcodeInput.value.trim();
 
       if (!passcode) {
-        setStatus('❌ 請輸入通行密碼', 'error');
+        setStatus('❌ Please enter the passcode', 'error');
         return;
       }
 
@@ -842,11 +844,11 @@
       if (sourceMode === 'url') {
         imageUrl = imageUrlInput.value.trim();
         if (!isValidImageUrl(imageUrl)) {
-          setStatus('❌ 請輸入有效的圖片網址', 'error');
+          setStatus('❌ Please enter a valid image URL', 'error');
           return;
         }
       } else if (!selectedFile) {
-        setStatus('❌ 請先上傳圖片', 'error');
+        setStatus('❌ Please upload an image first', 'error');
         return;
       }
 
@@ -856,12 +858,12 @@
 
       try {
         if (sourceMode === 'upload') {
-          setStatus('☁️ 上傳原始圖片至臨時圖床...', 'loading');
+          setStatus('☁️ Uploading original image to a temporary host...', 'loading');
           imageUrl = await uploadOriginalImage(selectedFile, passcode);
         }
 
         const payload = { imageUrl, image_url: imageUrl };
-        setStatus('🔍 分析搜尋中，請稍候...', 'loading');
+        setStatus('🔍 Analyzing, please wait...', 'loading');
 
         const response = await fetch(WORKER_URL, {
           method: 'POST',
@@ -873,7 +875,7 @@
         });
 
         if (response.status === 401) {
-          setStatus('❌ 密碼錯誤，拒絕存取', 'error');
+          setStatus('❌ Incorrect passcode, access denied', 'error');
           return;
         }
 
@@ -881,12 +883,12 @@
           let detail = '';
           try {
             const errBody = await response.json();
-            detail = errBody.error ? `：${errBody.error}` : '';
+            detail = errBody.error ? `: ${errBody.error}` : '';
           } catch (_) {
             /* ignore */
           }
           setStatus(
-            `❌ 請求失敗（HTTP ${response.status}）${detail}`,
+            `❌ Request failed (HTTP ${response.status})${detail}`,
             'error'
           );
           return;
@@ -903,13 +905,17 @@
           visualCount: 0,
         };
         setStatus(
-          `✅ Exact ${counts.exactCount}／Visual ${counts.visualCount}`,
+          `✅ Exact ${counts.exactCount} / Visual ${counts.visualCount}`,
           'success'
         );
       } catch (err) {
         console.error(err);
         setStatus(
-          `❌ ${err && err.message ? err.message : '連線失敗，請檢查網路或服務是否正常'}`,
+          `❌ ${
+            err && err.message
+              ? err.message
+              : 'Connection failed. Check your network or service status.'
+          }`,
           'error'
         );
       } finally {
