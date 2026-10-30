@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>img-helper</title>
   <style>
     :root {
@@ -188,8 +188,14 @@
 
     .dropzone input[type="file"] {
       position: absolute;
-      inset: 0;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
       opacity: 0;
+      font-size: 16px;
+      z-index: 2;
       cursor: pointer;
     }
 
@@ -210,6 +216,27 @@
       border: 1px solid var(--card-border);
       object-fit: contain;
       background: #020617;
+    }
+
+    .preview-actions {
+      margin-top: 0.75rem;
+    }
+
+    .preview-actions:has(#edit-btn[hidden]) {
+      display: none;
+    }
+
+    .preview-note {
+      margin-top: 0.55rem;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    #edit-btn[hidden],
+    #preview-note[hidden],
+    #editor-error[hidden],
+    #editor[hidden] {
+      display: none !important;
     }
 
     .preview-error {
@@ -390,6 +417,197 @@
       font-size: 0.95rem;
     }
 
+    .btn-tool,
+    .btn-ghost,
+    .btn-primary {
+      font: inherit;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+    }
+
+    .btn-tool,
+    .btn-ghost {
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      padding: 0.55rem 0.8rem;
+    }
+
+    .btn-tool:hover:not(:disabled),
+    .btn-ghost:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      padding: 0.65rem 1.05rem;
+      font-weight: 700;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-tool:disabled,
+    .btn-ghost:disabled,
+    .btn-primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .editor {
+      position: fixed;
+      z-index: 1000;
+      top: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: 100vh;
+      height: 100svh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        max(0.75rem, env(safe-area-inset-top))
+        max(0.75rem, env(safe-area-inset-right))
+        max(0.75rem, env(safe-area-inset-bottom))
+        max(0.75rem, env(safe-area-inset-left));
+      background: rgba(2, 6, 23, 0.78);
+    }
+
+    html.editor-open,
+    body.editor-open {
+      overflow: hidden;
+      height: 100%;
+    }
+
+    .editor-dialog:focus {
+      outline: none;
+    }
+
+    .editor-dialog {
+      width: min(880px, 100%);
+      max-height: calc(100vh - 1.5rem);
+      max-height: calc(100svh - 1.5rem);
+      overflow: auto;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.1rem 1.15rem 1rem;
+    }
+
+    .editor-header h2 {
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+
+    .editor-header p {
+      margin-top: 0.3rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .editor-stage {
+      position: relative;
+      height: min(52vh, 460px);
+      height: min(52svh, 460px);
+      margin: 0.9rem 0 0.55rem;
+      border-radius: 10px;
+      background: #020617;
+      border: 1px solid var(--card-border);
+      touch-action: none;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    #editor-canvas {
+      position: absolute;
+      display: block;
+    }
+
+    .shade {
+      position: absolute;
+      background: rgba(2, 6, 23, 0.62);
+      pointer-events: none;
+    }
+
+    .crop-box {
+      position: absolute;
+      outline: 2px solid #f8fafc;
+      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.9);
+      cursor: move;
+      touch-action: none;
+      z-index: 2;
+    }
+
+    .crop-grid {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(to right, transparent 33.33%, rgba(248, 250, 252, 0.45) 33.33%, rgba(248, 250, 252, 0.45) calc(33.33% + 1px), transparent calc(33.33% + 1px), transparent 66.66%, rgba(248, 250, 252, 0.45) 66.66%, rgba(248, 250, 252, 0.45) calc(66.66% + 1px), transparent calc(66.66% + 1px)),
+        linear-gradient(to bottom, transparent 33.33%, rgba(248, 250, 252, 0.45) 33.33%, rgba(248, 250, 252, 0.45) calc(33.33% + 1px), transparent calc(33.33% + 1px), transparent 66.66%, rgba(248, 250, 252, 0.45) 66.66%, rgba(248, 250, 252, 0.45) calc(66.66% + 1px), transparent calc(66.66% + 1px));
+    }
+
+    .crop-handle {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: #f8fafc;
+      border: 2px solid var(--accent);
+      border-radius: 3px;
+      touch-action: none;
+    }
+
+    .crop-handle::before {
+      content: "";
+      position: absolute;
+      inset: -8px;
+    }
+
+    .crop-handle[data-handle="nw"] { left: -7px; top: -7px; cursor: nwse-resize; }
+    .crop-handle[data-handle="ne"] { right: -7px; top: -7px; cursor: nesw-resize; }
+    .crop-handle[data-handle="sw"] { left: -7px; bottom: -7px; cursor: nesw-resize; }
+    .crop-handle[data-handle="se"] { right: -7px; bottom: -7px; cursor: nwse-resize; }
+    .crop-handle[data-handle="n"] { left: calc(50% - 7px); top: -7px; cursor: ns-resize; }
+    .crop-handle[data-handle="s"] { left: calc(50% - 7px); bottom: -7px; cursor: ns-resize; }
+    .crop-handle[data-handle="w"] { left: -7px; top: calc(50% - 7px); cursor: ew-resize; }
+    .crop-handle[data-handle="e"] { right: -7px; top: calc(50% - 7px); cursor: ew-resize; }
+
+    .editor-meta {
+      min-height: 1.25rem;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .editor-error {
+      color: var(--danger);
+      font-size: 0.85rem;
+      margin-top: 0.35rem;
+    }
+
+    .editor-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.7rem;
+      margin-top: 0.85rem;
+    }
+
+    .editor-tools,
+    .editor-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+
     footer {
       text-align: center;
       margin-top: 2.5rem;
@@ -404,6 +622,26 @@
 
       .card {
         padding: 1.15rem;
+      }
+
+      .editor {
+        padding: 0.6rem;
+      }
+
+      .editor-stage {
+        height: min(42vh, 360px);
+        height: min(42svh, 360px);
+      }
+
+      .editor-toolbar,
+      .editor-actions,
+      .editor-tools {
+        width: 100%;
+      }
+
+      .editor-actions .btn-primary,
+      .editor-actions .btn-ghost {
+        flex: 1;
       }
     }
   </style>
@@ -455,16 +693,20 @@
                 type="file"
                 id="image-file"
                 name="image-file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
               />
               <div class="dropzone-title">Click or drag an image here</div>
-              <div class="dropzone-hint">JPG, PNG, or WEBP up to 5 MB. Original file is uploaded to a temporary host (usually expires in ~5 minutes; fallback hosts may keep files up to 1 hour).</div>
+              <div class="dropzone-hint">JPG, PNG, WEBP, or an iPhone photo. Crop or rotate before upload. Large photos are resized to stay under 5 MB, then sent to a temporary host (usually expires in ~5 minutes).</div>
               <div class="dropzone-file" id="file-name"></div>
             </div>
           </div>
 
           <div class="preview-wrap" id="preview-wrap">
             <img id="preview-img" alt="Image preview" />
+            <div class="preview-actions">
+              <button type="button" class="btn-tool" id="edit-btn" hidden>Edit image</button>
+            </div>
+            <p class="preview-note" id="preview-note" hidden></p>
           </div>
           <p class="preview-error" id="preview-error">Could not load preview. Check that the URL or file is a valid image.</p>
         </div>
@@ -477,6 +719,52 @@
     </main>
 
     <footer>img-helper · for teaching &amp; learning</footer>
+  </div>
+
+  <div id="editor" class="editor" hidden>
+    <div
+      class="editor-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="editor-title"
+      tabindex="-1"
+    >
+      <div class="editor-header">
+        <h2 id="editor-title">Edit image</h2>
+        <p>Drag the frame to crop. Rotate if needed, then apply. The result is what gets uploaded.</p>
+      </div>
+      <div class="editor-stage" id="editor-stage">
+        <canvas id="editor-canvas"></canvas>
+        <div class="shade" id="shade-top"></div>
+        <div class="shade" id="shade-left"></div>
+        <div class="shade" id="shade-right"></div>
+        <div class="shade" id="shade-bottom"></div>
+        <div id="crop-box" class="crop-box">
+          <div class="crop-grid"></div>
+          <span class="crop-handle" data-handle="nw"></span>
+          <span class="crop-handle" data-handle="n"></span>
+          <span class="crop-handle" data-handle="ne"></span>
+          <span class="crop-handle" data-handle="e"></span>
+          <span class="crop-handle" data-handle="se"></span>
+          <span class="crop-handle" data-handle="s"></span>
+          <span class="crop-handle" data-handle="sw"></span>
+          <span class="crop-handle" data-handle="w"></span>
+        </div>
+      </div>
+      <div class="editor-meta" id="editor-meta"></div>
+      <p class="editor-error" id="editor-error" hidden></p>
+      <div class="editor-toolbar">
+        <div class="editor-tools">
+          <button type="button" class="btn-tool" id="rotate-left">Rotate left</button>
+          <button type="button" class="btn-tool" id="rotate-right">Rotate right</button>
+          <button type="button" class="btn-tool" id="reset-edit">Reset</button>
+        </div>
+        <div class="editor-actions">
+          <button type="button" class="btn-ghost" id="cancel-edit">Cancel</button>
+          <button type="button" class="btn-primary" id="apply-edit">Apply</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -505,12 +793,38 @@
     const previewWrap = document.getElementById('preview-wrap');
     const previewImg = document.getElementById('preview-img');
     const previewError = document.getElementById('preview-error');
+    const editBtn = document.getElementById('edit-btn');
+    const previewNote = document.getElementById('preview-note');
     const sourceTabs = document.querySelectorAll('.source-tab');
     const sourcePanels = document.querySelectorAll('.source-panel');
+    const editorEl = document.getElementById('editor');
+    const editorStage = document.getElementById('editor-stage');
+    const editorCanvas = document.getElementById('editor-canvas');
+    const cropBox = document.getElementById('crop-box');
+    const editorMeta = document.getElementById('editor-meta');
+    const editorError = document.getElementById('editor-error');
+    const applyEditBtn = document.getElementById('apply-edit');
+    const shadeTop = document.getElementById('shade-top');
+    const shadeLeft = document.getElementById('shade-left');
+    const shadeRight = document.getElementById('shade-right');
+    const shadeBottom = document.getElementById('shade-bottom');
 
     let sourceMode = 'url';
+    let sourceUploadFile = null;
     let selectedFile = null;
+    let selectionEdited = false;
     let objectUrl = null;
+
+    let editorFile = null;
+    let editorToken = 0;
+    let editorBusy = false;
+    let sourceImg = null;
+    let sourceWasScaled = false;
+    let pickToken = 0;
+    let rotation = 0;
+    let cropNorm = { x: 0, y: 0, w: 1, h: 1 };
+    let display = { x: 0, y: 0, w: 1, h: 1 };
+    let drag = null;
 
     const savedPasscode = localStorage.getItem(PASSCODE_KEY);
     if (savedPasscode) {
@@ -572,11 +886,16 @@
 
       if (mode === 'url') {
         selectedFile = null;
+        sourceUploadFile = null;
+        selectionEdited = false;
         imageFileInput.value = '';
         fileNameEl.textContent = '';
+        updateEditButton();
         updateUrlPreview();
       } else if (selectedFile) {
         previewSelectedFile(selectedFile);
+      } else {
+        updateEditButton();
       }
     }
 
@@ -610,35 +929,685 @@
       previewTimer = setTimeout(updateUrlPreview, 300);
     });
 
+    function describeFile(file) {
+      const kb = file.size / 1024;
+      const sizeLabel = kb < 10 ? `${kb.toFixed(1)} KB` : `${Math.round(kb)} KB`;
+      return `${file.name} (${sizeLabel})`;
+    }
+
+    function updateEditButton() {
+      const show = sourceMode === 'upload' && !!selectedFile;
+      editBtn.hidden = !show;
+      previewNote.hidden = !show;
+      if (show) {
+        previewNote.textContent = selectionEdited
+          ? 'Edited image will be uploaded when you start analysis.'
+          : 'This image will be uploaded when you start analysis.';
+      }
+    }
+
     function previewSelectedFile(file) {
       clearObjectUrl();
       objectUrl = URL.createObjectURL(file);
-      fileNameEl.textContent = `${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+      fileNameEl.textContent = describeFile(file);
       showPreviewFromSrc(objectUrl, true);
+      updateEditButton();
+    }
+
+    function sourcePixelSize(image) {
+      const source = image || sourceImg;
+      if (!source) return { w: 0, h: 0 };
+      return {
+        w: source.naturalWidth || source.width || 0,
+        h: source.naturalHeight || source.height || 0,
+      };
+    }
+
+    function rotatedPixelSize(width, height, degrees) {
+      const turn = ((degrees % 360) + 360) % 360;
+      if (turn === 90 || turn === 270) return { w: height, h: width };
+      return { w: width, h: height };
+    }
+
+    function drawTransformed(ctx, image, degrees, destW, destH) {
+      const turn = ((degrees % 360) + 360) % 360;
+      ctx.save();
+      ctx.translate(destW / 2, destH / 2);
+      ctx.rotate((turn * Math.PI) / 180);
+      if (turn === 90 || turn === 270) {
+        ctx.drawImage(image, -destH / 2, -destW / 2, destH, destW);
+      } else {
+        ctx.drawImage(image, -destW / 2, -destH / 2, destW, destH);
+      }
+      ctx.restore();
+    }
+
+    function isFullFrame() {
+      return (
+        cropNorm.x <= 0.001 &&
+        cropNorm.y <= 0.001 &&
+        cropNorm.w >= 0.999 &&
+        cropNorm.h >= 0.999
+      );
+    }
+
+    function outputPixelSize() {
+      if (!sourceImg) return { w: 0, h: 0 };
+      const size = sourcePixelSize();
+      const rot = rotatedPixelSize(size.w, size.h, rotation);
+      return {
+        w: Math.max(1, Math.round(cropNorm.w * rot.w)),
+        h: Math.max(1, Math.round(cropNorm.h * rot.h)),
+      };
+    }
+
+    function renderMeta() {
+      const size = outputPixelSize();
+      const parts = [`${size.w} × ${size.h} px`];
+      if (rotation) parts.push(`rotated ${rotation}°`);
+      if (rotation === 0 && isFullFrame() && !sourceWasScaled && editorFile && editorFile.size <= MAX_UPLOAD_BYTES && !needsTranscode(editorFile)) {
+        parts.push('original file kept if you apply now');
+      }
+      editorMeta.textContent = parts.join(' · ');
+    }
+
+    function renderDisplay() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      editorCanvas.width = Math.max(1, Math.round(display.w * dpr));
+      editorCanvas.height = Math.max(1, Math.round(display.h * dpr));
+      editorCanvas.style.width = `${display.w}px`;
+      editorCanvas.style.height = `${display.h}px`;
+      editorCanvas.style.left = `${display.x}px`;
+      editorCanvas.style.top = `${display.y}px`;
+      const ctx = editorCanvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.clearRect(0, 0, display.w, display.h);
+      drawTransformed(ctx, sourceImg, rotation, display.w, display.h);
+    }
+
+    function placeShade(el, x, y, w, h) {
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.width = `${Math.max(0, w)}px`;
+      el.style.height = `${Math.max(0, h)}px`;
+    }
+
+    function renderCropBox() {
+      const rect = {
+        x: display.x + cropNorm.x * display.w,
+        y: display.y + cropNorm.y * display.h,
+        w: cropNorm.w * display.w,
+        h: cropNorm.h * display.h,
+      };
+      cropBox.style.left = `${rect.x}px`;
+      cropBox.style.top = `${rect.y}px`;
+      cropBox.style.width = `${rect.w}px`;
+      cropBox.style.height = `${rect.h}px`;
+
+      const stageW = editorStage.clientWidth;
+      const stageH = editorStage.clientHeight;
+      placeShade(shadeTop, 0, 0, stageW, rect.y);
+      placeShade(shadeBottom, 0, rect.y + rect.h, stageW, stageH - rect.y - rect.h);
+      placeShade(shadeLeft, 0, rect.y, rect.x, rect.h);
+      placeShade(shadeRight, rect.x + rect.w, rect.y, stageW - rect.x - rect.w, rect.h);
+      renderMeta();
+    }
+
+    function layoutEditor() {
+      if (!sourceImg || editorEl.hidden) return;
+      const pad = 16;
+      const stageW = editorStage.clientWidth - pad * 2;
+      const stageH = editorStage.clientHeight - pad * 2;
+      if (stageW < 8 || stageH < 8) return;
+
+      const size = sourcePixelSize();
+      const rot = rotatedPixelSize(size.w, size.h, rotation);
+      const scale = Math.min(stageW / rot.w, stageH / rot.h);
+      const dw = Math.max(1, rot.w * scale);
+      const dh = Math.max(1, rot.h * scale);
+      display = {
+        x: pad + (stageW - dw) / 2,
+        y: pad + (stageH - dh) / 2,
+        w: dw,
+        h: dh,
+      };
+      renderDisplay();
+      renderCropBox();
+    }
+
+    function releaseSourceImage() {
+      if (sourceImg && typeof sourceImg.close === 'function') {
+        sourceImg.close();
+      }
+      sourceImg = null;
+    }
+
+    function setEditorError(message) {
+      editorError.hidden = !message;
+      editorError.textContent = message || '';
+    }
+
+    function isIOSDevice() {
+      const ua = navigator.userAgent || '';
+      return /iPad|iPhone|iPod/.test(ua)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+
+    function maxSourceEdge() {
+      return isIOSDevice() ? 2048 : 4096;
+    }
+
+    function isLikelyImage(file) {
+      const type = (file.type || '').toLowerCase();
+      if (!type || type.startsWith('image/')) return true;
+      return /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)$/i.test(file.name || '');
+    }
+
+    function needsTranscode(file) {
+      const type = (file.type || '').toLowerCase();
+      const name = (file.name || '').toLowerCase();
+      return type === 'image/heic' || type === 'image/heif' || /\.hei[cf]$/.test(name);
+    }
+
+    function syncEditorFrame() {
+      const viewport = window.visualViewport;
+      if (!viewport) return;
+      editorEl.style.top = `${viewport.offsetTop}px`;
+      editorEl.style.height = `${viewport.height}px`;
+    }
+
+    function lockPageForEditor() {
+      if (document.body.dataset.editorScroll == null) {
+        const y = window.scrollY || document.documentElement.scrollTop || 0;
+        document.body.dataset.editorScroll = String(y);
+      }
+      document.documentElement.classList.add('editor-open');
+      document.body.classList.add('editor-open');
+      window.scrollTo(0, 0);
+      syncEditorFrame();
+    }
+
+    function unlockPageForEditor() {
+      const y = parseInt(document.body.dataset.editorScroll || '0', 10) || 0;
+      document.documentElement.classList.remove('editor-open');
+      document.body.classList.remove('editor-open');
+      delete document.body.dataset.editorScroll;
+      editorEl.style.top = '';
+      editorEl.style.height = '';
+      window.scrollTo(0, y);
+    }
+
+    function showEditorShell(file) {
+      editorEl.hidden = false;
+      editorEl.removeAttribute('hidden');
+      lockPageForEditor();
+      applyEditBtn.disabled = true;
+      setEditorError('');
+      editorMeta.textContent = 'Loading image…';
+      fileNameEl.textContent = file && file.name ? `Editing ${file.name}…` : 'Editing photo…';
+      requestAnimationFrame(() => {
+        syncEditorFrame();
+        layoutEditor();
+      });
+    }
+
+    function loadImageElement(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(img);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Could not read this image'));
+        };
+        img.src = url;
+      });
+    }
+
+    async function maybeDownscale(image) {
+      const size = sourcePixelSize(image);
+      const maxEdge = maxSourceEdge();
+      if (!size.w || !size.h) {
+        throw new Error('Could not read this image');
+      }
+      if (size.w <= maxEdge && size.h <= maxEdge) {
+        return { image, scaled: false };
+      }
+      const scale = maxEdge / Math.max(size.w, size.h);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(size.w * scale));
+      canvas.height = Math.max(1, Math.round(size.h * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      if (typeof image.close === 'function') image.close();
+      return { image: canvas, scaled: true };
+    }
+
+    async function decodeImageFile(file) {
+      const maxEdge = maxSourceEdge();
+      if (typeof createImageBitmap === 'function') {
+        try {
+          const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+          return maybeDownscale(bitmap);
+        } catch (_) {
+          /* Try a smaller decode before falling back. */
+        }
+        try {
+          const bitmap = await createImageBitmap(file, {
+            imageOrientation: 'from-image',
+            resizeWidth: maxEdge,
+            resizeQuality: 'high',
+          });
+          return { image: bitmap, scaled: true };
+        } catch (_) {
+          /* Fall back to an Image element. */
+        }
+      }
+      return maybeDownscale(await loadImageElement(file));
+    }
+
+    function openEditor(file) {
+      const token = ++editorToken;
+      editorBusy = false;
+      editorFile = file;
+      rotation = 0;
+      cropNorm = { x: 0, y: 0, w: 1, h: 1 };
+      drag = null;
+      sourceWasScaled = false;
+      releaseSourceImage();
+      showEditorShell(file);
+
+      decodeImageFile(file).then((decoded) => {
+        if (token !== editorToken) {
+          if (decoded.image && typeof decoded.image.close === 'function') {
+            decoded.image.close();
+          }
+          return;
+        }
+        sourceImg = decoded.image;
+        sourceWasScaled = decoded.scaled;
+        applyEditBtn.disabled = false;
+        const dialog = editorEl.querySelector('.editor-dialog');
+        if (dialog && typeof dialog.focus === 'function') {
+          try {
+            dialog.focus({ preventScroll: true });
+          } catch (_) {
+            /* iOS can reject focus while the photo picker is closing. */
+          }
+        }
+        requestAnimationFrame(() => {
+          syncEditorFrame();
+          layoutEditor();
+          requestAnimationFrame(() => layoutEditor());
+        });
+      }).catch((err) => {
+        if (token !== editorToken) return;
+        console.error(err);
+        applyEditBtn.disabled = true;
+        setEditorError('Could not open this photo. Try another image, or take a screenshot and upload that.');
+        editorMeta.textContent = '';
+      });
+    }
+
+    function closeEditor() {
+      editorToken += 1;
+      pickToken += 1;
+      editorEl.hidden = true;
+      editorEl.setAttribute('hidden', '');
+      unlockPageForEditor();
+      editorBusy = false;
+      drag = null;
+      sourceWasScaled = false;
+      releaseSourceImage();
+      imageFileInput.value = '';
+      if (selectedFile) {
+        fileNameEl.textContent = describeFile(selectedFile);
+      } else {
+        fileNameEl.textContent = '';
+      }
+      setEditorError('');
+    }
+
+    function resizeCrop(mode, dx, dy, orig) {
+      const minW = Math.min(0.5, Math.max(32 / Math.max(display.w, 1), 0.02));
+      const minH = Math.min(0.5, Math.max(32 / Math.max(display.h, 1), 0.02));
+
+      if (mode === 'move') {
+        return {
+          x: Math.min(Math.max(0, orig.x + dx), 1 - orig.w),
+          y: Math.min(Math.max(0, orig.y + dy), 1 - orig.h),
+          w: orig.w,
+          h: orig.h,
+        };
+      }
+
+      let x1 = orig.x;
+      let y1 = orig.y;
+      let x2 = orig.x + orig.w;
+      let y2 = orig.y + orig.h;
+      const movesWest = mode === 'nw' || mode === 'w' || mode === 'sw';
+      const movesEast = mode === 'ne' || mode === 'e' || mode === 'se';
+      const movesNorth = mode === 'nw' || mode === 'n' || mode === 'ne';
+      const movesSouth = mode === 'sw' || mode === 's' || mode === 'se';
+
+      if (movesWest) x1 += dx;
+      if (movesEast) x2 += dx;
+      if (movesNorth) y1 += dy;
+      if (movesSouth) y2 += dy;
+
+      x1 = Math.min(Math.max(0, x1), 1);
+      x2 = Math.min(Math.max(0, x2), 1);
+      y1 = Math.min(Math.max(0, y1), 1);
+      y2 = Math.min(Math.max(0, y2), 1);
+
+      if (x2 - x1 < minW) {
+        if (movesWest) x1 = Math.max(0, x2 - minW);
+        else x2 = Math.min(1, x1 + minW);
+        if (x2 - x1 < minW) {
+          x1 = Math.max(0, Math.min(x1, 1 - minW));
+          x2 = x1 + minW;
+        }
+      }
+      if (y2 - y1 < minH) {
+        if (movesNorth) y1 = Math.max(0, y2 - minH);
+        else y2 = Math.min(1, y1 + minH);
+        if (y2 - y1 < minH) {
+          y1 = Math.max(0, Math.min(y1, 1 - minH));
+          y2 = y1 + minH;
+        }
+      }
+
+      return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+    }
+
+    function onCropPointerDown(e) {
+      if (!sourceImg || editorBusy) return;
+      const handle = e.target.closest('[data-handle]');
+      const rect = cropBox.getBoundingClientRect();
+      const inside =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      if (!handle && !inside) return;
+
+      drag = {
+        mode: handle ? handle.dataset.handle : 'move',
+        startX: e.clientX,
+        startY: e.clientY,
+        orig: { ...cropNorm },
+      };
+      try {
+        editorStage.setPointerCapture(e.pointerId);
+      } catch (_) {
+        /* Synthetic or already-released pointers still update on pointermove. */
+      }
+      e.preventDefault();
+    }
+
+    function onCropPointerMove(e) {
+      if (!drag) return;
+      const dx = (e.clientX - drag.startX) / display.w;
+      const dy = (e.clientY - drag.startY) / display.h;
+      cropNorm = resizeCrop(drag.mode, dx, dy, drag.orig);
+      renderCropBox();
+    }
+
+    function onCropPointerUp() {
+      drag = null;
+    }
+
+    function rotateEditor(delta) {
+      if (!sourceImg || editorBusy) return;
+      rotation = (rotation + delta + 360) % 360;
+      cropNorm = { x: 0, y: 0, w: 1, h: 1 };
+      layoutEditor();
+    }
+
+    function resetEditor() {
+      if (!sourceImg || editorBusy) return;
+      rotation = 0;
+      cropNorm = { x: 0, y: 0, w: 1, h: 1 };
+      layoutEditor();
+    }
+
+    function preferredMime(file) {
+      const type = (file.type || '').toLowerCase();
+      if (type === 'image/png' || type === 'image/webp' || type === 'image/jpeg') {
+        return type;
+      }
+      return 'image/jpeg';
+    }
+
+    function editedName(file, mime) {
+      const original = file.name || 'image';
+      const dot = original.lastIndexOf('.');
+      const base = dot > 0 ? original.slice(0, dot) : original;
+      const ext =
+        mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+      return `${base}-edited.${ext}`;
+    }
+
+    function canvasToBlob(canvas, type, quality) {
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), type, quality);
+      });
+    }
+
+    function renderCroppedCanvas(scale) {
+      const size = sourcePixelSize();
+      const rot = rotatedPixelSize(size.w, size.h, rotation);
+      const sx = Math.min(Math.max(0, cropNorm.x * rot.w), rot.w - 1);
+      const sy = Math.min(Math.max(0, cropNorm.y * rot.h), rot.h - 1);
+      const sw = Math.max(1, Math.min(cropNorm.w * rot.w, rot.w - sx));
+      const sh = Math.max(1, Math.min(cropNorm.h * rot.h, rot.h - sy));
+      const outW = Math.max(1, Math.round(sw * scale));
+      const outH = Math.max(1, Math.round(sh * scale));
+
+      const out = document.createElement('canvas');
+      out.width = outW;
+      out.height = outH;
+      const ctx = out.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.save();
+      ctx.translate(-sx * (outW / sw), -sy * (outH / sh));
+      ctx.scale(outW / sw, outH / sh);
+      drawTransformed(ctx, sourceImg, rotation, rot.w, rot.h);
+      ctx.restore();
+      return out;
+    }
+
+    async function blobUnderLimit(canvas, mime) {
+      let blob = await canvasToBlob(canvas, mime, 0.95);
+      if (!blob) blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+      let quality = 0.86;
+      while (blob && blob.size > MAX_UPLOAD_BYTES && quality >= 0.5) {
+        blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+        quality -= 0.08;
+      }
+      return blob;
+    }
+
+    async function exportEditedFile() {
+      const keepOriginal = rotation === 0
+        && isFullFrame()
+        && !sourceWasScaled
+        && editorFile.size <= MAX_UPLOAD_BYTES
+        && !needsTranscode(editorFile);
+      if (keepOriginal) return editorFile;
+
+      const mime = preferredMime(editorFile);
+      const size = outputPixelSize();
+      let scale = 1;
+      const maxEdge = 8192;
+      if (size.w > maxEdge || size.h > maxEdge) {
+        scale = maxEdge / Math.max(size.w, size.h);
+      }
+
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const canvas = renderCroppedCanvas(scale);
+        const blob = await blobUnderLimit(canvas, mime);
+        if (blob && blob.size <= MAX_UPLOAD_BYTES) {
+          const type = blob.type || 'image/jpeg';
+          return new File([blob], editedName(editorFile, type), {
+            type,
+            lastModified: Date.now(),
+          });
+        }
+        scale *= 0.75;
+      }
+
+      throw new Error('Edited image is still over 5 MB. Crop a smaller area and try again.');
+    }
+
+    async function applyEditor() {
+      if (!sourceImg || !editorFile || editorBusy) return;
+      const token = editorToken;
+      const openedFile = editorFile;
+      editorBusy = true;
+      applyEditBtn.disabled = true;
+      setEditorError('');
+      editorMeta.textContent = 'Processing image…';
+
+      try {
+        const prepared = await exportEditedFile();
+        if (token !== editorToken) return;
+        selectionEdited = prepared !== openedFile;
+        sourceUploadFile = openedFile;
+        selectedFile = prepared;
+        closeEditor();
+        previewSelectedFile(prepared);
+        setStatus(
+          selectionEdited
+            ? 'Edited image ready. It will be uploaded when you start analysis.'
+            : 'Image ready. It will be uploaded when you start analysis.',
+          'success'
+        );
+      } catch (err) {
+        if (token !== editorToken) return;
+        console.error(err);
+        setEditorError(
+          err && err.message ? err.message : 'Could not process this image.'
+        );
+        editorBusy = false;
+        applyEditBtn.disabled = false;
+        renderMeta();
+      }
     }
 
     function handleFile(file) {
       if (!file) return;
 
-      if (!file.type.startsWith('image/')) {
-        setStatus('❌ Please choose an image file', 'error');
+      if (!isLikelyImage(file)) {
+        showEditorShell(file);
+        applyEditBtn.disabled = true;
+        setEditorError('Please choose an image file.');
+        editorMeta.textContent = '';
         return;
       }
 
-      if (file.size > MAX_UPLOAD_BYTES) {
-        setStatus('❌ Image is too large. Please keep it under 5 MB', 'error');
-        return;
-      }
-
-      selectedFile = file;
       setStatus('', '');
-      previewSelectedFile(file);
+      openEditor(file);
     }
 
     imageFileInput.addEventListener('change', () => {
-      const file = imageFileInput.files && imageFileInput.files[0];
-      handleFile(file);
+      const picked = imageFileInput.files && imageFileInput.files[0];
+      if (!picked) return;
+      const token = ++pickToken;
+      const name = picked.name || 'photo.jpg';
+      const type = picked.type || '';
+      // Show the editor before iOS finishes dismissing the photo picker.
+      window.setTimeout(() => {
+        if (token !== pickToken) return;
+        showEditorShell({ name });
+      }, 0);
+      // Read the bytes during the change event. iOS can invalidate the picker File later.
+      picked.arrayBuffer().then((buffer) => {
+        if (token !== pickToken) return;
+        const stable = new File([buffer], name, {
+          type: type || 'image/jpeg',
+          lastModified: picked.lastModified || Date.now(),
+        });
+        window.setTimeout(() => {
+          if (token !== pickToken) return;
+          handleFile(stable);
+        }, 50);
+      }).catch((err) => {
+        if (token !== pickToken) return;
+        console.error(err);
+        showEditorShell({ name });
+        applyEditBtn.disabled = true;
+        setEditorError('Could not read this photo. Please try again.');
+        editorMeta.textContent = '';
+      });
     });
+
+    editBtn.addEventListener('click', () => {
+      const file = sourceUploadFile || selectedFile;
+      if (file) openEditor(file);
+    });
+
+    document.getElementById('rotate-left').addEventListener('click', () => {
+      rotateEditor(-90);
+    });
+    document.getElementById('rotate-right').addEventListener('click', () => {
+      rotateEditor(90);
+    });
+    document.getElementById('reset-edit').addEventListener('click', resetEditor);
+    document.getElementById('cancel-edit').addEventListener('click', closeEditor);
+    applyEditBtn.addEventListener('click', () => {
+      applyEditor();
+    });
+
+    editorEl.addEventListener('pointerdown', (e) => {
+      if (e.target === editorEl) closeEditor();
+    });
+
+    editorStage.addEventListener('pointerdown', onCropPointerDown);
+    editorStage.addEventListener('pointermove', onCropPointerMove);
+    editorStage.addEventListener('pointerup', onCropPointerUp);
+    editorStage.addEventListener('pointercancel', onCropPointerUp);
+
+    document.addEventListener('keydown', (e) => {
+      if (editorEl.hidden) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeEditor();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (!editorEl.hidden) {
+        syncEditorFrame();
+        layoutEditor();
+      }
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        if (editorEl.hidden) return;
+        syncEditorFrame();
+        layoutEditor();
+      });
+      window.visualViewport.addEventListener('scroll', () => {
+        if (!editorEl.hidden) syncEditorFrame();
+      });
+    }
+
+    if (typeof ResizeObserver === 'function') {
+      const stageObserver = new ResizeObserver(() => {
+        if (!editorEl.hidden && sourceImg) layoutEditor();
+      });
+      stageObserver.observe(editorStage);
+    }
 
     ['dragenter', 'dragover'].forEach((eventName) => {
       dropzone.addEventListener(eventName, (e) => {
@@ -802,8 +1771,8 @@
       return { exactCount: exact.length, visualCount: visual.length };
     }
 
-    // Upload the original file via Worker to a temporary host
-    async function uploadOriginalImage(file, passcode) {
+    // Upload the prepared file (edited, or original if unchanged) to a temporary host
+    async function uploadPreparedImage(file, passcode) {
       const formData = new FormData();
       formData.append('image', file, file.name || 'upload.jpg');
 
@@ -831,6 +1800,7 @@
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (!editorEl.hidden) return;
 
       const passcode = passcodeInput.value.trim();
 
@@ -858,8 +1828,13 @@
 
       try {
         if (sourceMode === 'upload') {
-          setStatus('☁️ Uploading original image to a temporary host...', 'loading');
-          imageUrl = await uploadOriginalImage(selectedFile, passcode);
+          setStatus(
+            selectionEdited
+              ? '☁️ Uploading edited image to a temporary host...'
+              : '☁️ Uploading image to a temporary host...',
+            'loading'
+          );
+          imageUrl = await uploadPreparedImage(selectedFile, passcode);
         }
 
         const payload = { imageUrl, image_url: imageUrl };
